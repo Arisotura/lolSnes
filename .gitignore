@@ -1,0 +1,10 @@
+/snes
+/lolSnes.pnps
+/lolSnes.prj
+/*.nds
+/lolSnes.pnproj
+/nitrofiles/snes
+/arm7/*.elf
+/arm9/*.elf
+/arm9/build
+/arm7/build

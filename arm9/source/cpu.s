@@ -120,6 +120,7 @@ CPU_Regs:
 		bl Mem_IOWrite8
 		b 2f
 1:
+		bic r3, r3, #0xF0000000
 		mov r0, r0, lsl #0x13
 		strb r1, [r3, r0, lsr #0x13]
 2:
@@ -138,6 +139,7 @@ CPU_Regs:
 		bl Mem_IOWrite16
 		b 2f
 1:
+		bic r3, r3, #0xF0000000
 		mov r0, r0, lsl #0x13
 		add r3, r3, r0, lsr #0x13
 		strb r1, [r3]
@@ -2127,7 +2129,7 @@ OP_m1_EOR_SRIndirectIndY:
 @ --- INC ---------------------------------------------------------------------
 
 .macro INC_8 dst=r0
-	adds \dst, r0, #1
+	add \dst, r0, #1
 	ands \dst, \dst, #0xFF
 	bic snesP, snesP, #flagNZ
 	orreq snesP, snesP, #flagZ

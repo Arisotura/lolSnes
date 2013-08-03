@@ -44,7 +44,12 @@ int main(void)
 	//iprintf("%08X %08X %08X %04X%04X\n", CPU_Regs.nCycles, CPU_Regs.PC, CPU_Regs.P.val, CPU_Regs.DBR, CPU_Regs.D);
 	//iprintf("%04X%04X %08X %08X %08X\n", CPU_Regs.PBR, CPU_Regs.S, CPU_Regs.Y, CPU_Regs.X, CPU_Regs.A);
 	CPU_Reset();
+	fifoSendValue32(FIFO_USER_01, 1);
+	
+	swiWaitForVBlank();
+	fifoSendValue32(FIFO_USER_01, 2);
 
+	swiWaitForVBlank();
 	CPU_Run();
 	/*for (;;)
 	{

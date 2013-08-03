@@ -74,29 +74,55 @@ SPC_Memory:
 @ --- Prefetch ----------------------------------------------------------------
 @ assume that prefetches always occur in system RAM or cached ROM
 @ (anything that modifies PBR will also update the ROM caches)
-@ OpcodePrefetch8 used to prefetch the opcode
-@ other prefetches are sequential (to be called right after the opcode prefetch)
-
-.macro OpcodePrefetch8
-@ TODO
-.endm
 
 .macro Prefetch8
-@ TODO
+	ldrb r0, [memory, spcPC, lsr #0x10]
+	add spcPC, spcPC, #0x10000
 .endm
 
 .macro Prefetch16
-@ TODO
-.endm
-
-.macro Prefetch24
-@ TODO
+	ldrb r0, [memory, spcPC, lsr #0x10]
+	add spcPC, spcPC, #0x10000
+	ldrb r3, [memory, spcPC, lsr #0x10]
+	add spcPC, spcPC, #0x10000
+	orr r0, r0, r3, lsl #0x8
 .endm
 
 @ --- Opcode tables -----------------------------------------------------------
 
 OpTableStart:
-@ TODO
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@0
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@1
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@2
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@3
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@4
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@5
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@6
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@7
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@8
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@9
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@A
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@B
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_SP_X, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@C
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_X_Imm, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@D
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@E
+	.long OP_MOV_A_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@F
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 
 @ --- Misc. functions ---------------------------------------------------------
 
@@ -104,12 +130,12 @@ OpTableStart:
 .global SPC_Run
 
 .macro LoadRegs
-	ldr r0, =CPU_Regs
+	ldr r0, =SPC_Regs
 	ldmia r0, {r4-r11}
 .endm
 
 .macro StoreRegs
-	ldr r0, =CPU_Regs
+	ldr r0, =SPC_Regs
 	stmia r0, {r4-r11}
 .endm
 
@@ -121,7 +147,7 @@ OpTableStart:
 .endm
 
 
-@ add fast cycles (for CPU IO cycles)
+@ add cycles
 .macro AddCycles num, cond=
 	sub\cond spcCycles, spcCycles, #\num
 .endm
@@ -133,18 +159,14 @@ SPC_Reset:
 	mov spcA, #0
 	mov spcX, #0
 	mov spcY, #0
-	mov spcSP, #0
+	mov spcSP, #0x100
 	mov spcPSW, #0	@ we'll do PC later
 	
-	@ TODO
-	@ldr memoryMap, =Mem_PtrTable
-	@SetOpcodeTable
+	ldr memory, =SPC_Memory
+	ldr opTable, =OpTableStart
 	
-	@ldr r0, =(ROM_Bank0 + 0x8000)
-	@sub r0, r0, #vec_Reset
-	@ldrh r0, [r0]
 	ldr r0, =vec_Reset
-	orr snesPC, snesPC, r0, lsl #0x10
+	orr spcPC, spcPC, r0, lsl #0x10
 	
 	mov spcCycles, #0
 	StoreRegs
@@ -161,13 +183,11 @@ SPC_Run:
 frameloop:
 		ldr r0, =0x42AB
 		add spcCycles, spcCycles, r0
-		b emuloop
 			
 emuloop:
-			@OpcodePrefetch8
-			@ldr r0, [opTable, r0, lsl #0x2]
-			@bx r0
-			@ TODO get opcode and run it
+			Prefetch8
+			ldr r0, [opTable, r0, lsl #0x2]
+			bx r0
 op_return:
 
 			cmp spcCycles, #1
@@ -183,3 +203,38 @@ op_return:
 @ --- Addressing modes --------------------------------------------------------
 
 @ todo
+
+@ --- Unknown opcode ----------------------------------------------------------
+
+OP_UNK:
+	@swi #0xBEEF
+	b OP_UNK
+	
+@ --- MOV ---------------------------------------------------------------------
+
+OP_MOV_A_Imm:
+	Prefetch8
+	movs spcA, r0
+	orreq spcPSW, spcPSW, #flagZ
+	bicne spcPSW, spcPSW, #flagZ
+	tst spcA, #0x80
+	orrne spcPSW, spcPSW, #flagN
+	biceq spcPSW, spcPSW, #flagN
+	AddCycles 2
+	b op_return
+
+OP_MOV_X_Imm:
+	Prefetch8
+	movs spcX, r0
+	orreq spcPSW, spcPSW, #flagZ
+	bicne spcPSW, spcPSW, #flagZ
+	tst spcX, #0x80
+	orrne spcPSW, spcPSW, #flagN
+	biceq spcPSW, spcPSW, #flagN
+	AddCycles 2
+	b op_return
+	
+OP_MOV_SP_X:
+	orr spcSP, spcX, #0x100
+	AddCycles 2
+	b op_return

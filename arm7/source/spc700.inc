@@ -9,7 +9,7 @@ spcPC			.req r7		@ high hword: PC
 spcPSW			.req r7		@ low hword: PSW
 spcCycles		.req r6		@ SPC700 cycle count
 opTable			.req r5		@ pointer to the opcode table in use
-memoryMap		.req r4		@ pointer to the memory map table
+memory			.req r4		@ pointer to the memory
 
 @ --- Variables and whatever --------------------------------------------------
 

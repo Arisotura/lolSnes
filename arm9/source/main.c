@@ -12,6 +12,8 @@
 
 int main(void)
 {
+	defaultExceptionHandler();
+	
 	//vramSetBankA(VRAM_A_LCD);
 	videoSetMode(MODE_0_2D);
 

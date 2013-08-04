@@ -1,6 +1,8 @@
 #include <nds.h>
 #include <stdio.h>
 
+#include "memory.h"
+
 // PPU
 //
 // TODO LIST:
@@ -79,14 +81,6 @@ PPU_Background PPU_BG[4];
 u8 PPU_Mode;
 
 
-// ---- HAX SECTION ------------------------------
-// TODO move that shit outta here
-
-u16 APU_2140;
-
-// ---- HAX SECTION END --------------------------
-
-
 void PPU_Reset()
 {
 	int i;
@@ -145,10 +139,6 @@ void PPU_Reset()
 	*(u16*)0x0400000A = 0x0080 | (1 << 4) | (1 << 10);
 	*(u16*)0x0400000C = 0x0080 | (2 << 4) | (2 << 10);
 	*(u16*)0x0400000E = 0x0080 | (3 << 4) | (3 << 10);
-	
-	
-	// HAX
-	APU_2140 = 0xBBAA;
 }
 
 
@@ -520,9 +510,10 @@ u8 PPU_Read8(u32 addr)
 		}
 		break;
 		
-		case 0x40:
-			ret = (u8)APU_2140;
-			break;
+		case 0x40: ret = SPC_IOPorts[4]; break;
+		case 0x41: ret = SPC_IOPorts[5]; break;
+		case 0x42: ret = SPC_IOPorts[6]; break;
+		case 0x43: ret = SPC_IOPorts[7]; break;
 	}
 	
 	asm("ldmia sp!, {r12}");
@@ -539,10 +530,8 @@ u16 PPU_Read16(u32 addr)
 		// not in the right place, but well
 		// our I/O functions are mapped to the whole $21xx range
 		
-		case 0x40:
-			ret = APU_2140;
-			//iprintf("read 2140: %04X\n", ret);
-			break;
+		case 0x40: ret = *(u16*)&SPC_IOPorts[4]; break;
+		case 0x42: ret = *(u16*)&SPC_IOPorts[6]; break;
 	}
 	
 	asm("ldmia sp!, {r12}");
@@ -646,18 +635,10 @@ void PPU_Write8(u32 addr, u8 val)
 			iprintf("21%02X = %02X\n", addr, val);
 			break;
 			
-		case 0x40:
-			//iprintf("write 2140: %02X\n", val);
-			if (val == 0 && APU_2140 == 0xBBAA) break;
-			APU_2140 &= 0xFF00;
-			APU_2140 |= val;
-			break;
-		case 0x41:
-			//iprintf("write 2141: %02X\n", val);
-			if (val == 0 && APU_2140 == 0xBBAA) break;
-			APU_2140 &= 0x00FF;
-			APU_2140 |= (u16)val << 8;
-			break;
+		case 0x40: SPC_IOPorts[0] = val; break;
+		case 0x41: SPC_IOPorts[1] = val; break;
+		case 0x42: SPC_IOPorts[2] = val; break;
+		case 0x43: SPC_IOPorts[3] = val; break;
 		
 		default:
 			//iprintf("PPU_Write8(%08X, %08X)\n", addr, val);
@@ -679,10 +660,11 @@ void PPU_Write16(u32 addr, u16 val)
 			PPU_VRAMAddr = val;
 			break;
 			
-		case 0x40:
-			//iprintf("write 2140: %04X\n", val);
-			APU_2140 = val;
-			break;
+		case 0x40: *(u16*)&SPC_IOPorts[0] = val; break;
+		case 0x42: *(u16*)&SPC_IOPorts[2] = val; break;
+		
+		case 0x41:
+		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;
 		
 		// otherwise, just do two 8bit writes
 		default:

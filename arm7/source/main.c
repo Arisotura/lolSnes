@@ -56,6 +56,11 @@ int main()
 					swiWaitForVBlank();
 					SPC_Run();
 					break;
+					
+				case 3:
+					while (!fifoCheckAddress(FIFO_USER_01));
+					SPC_IOPorts = fifoGetAddress(FIFO_USER_01);
+					break;
 			}
 		}
 		

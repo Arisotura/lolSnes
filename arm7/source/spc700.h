@@ -39,8 +39,13 @@ extern SPC_Regs_t SPC_Regs;
 
 extern u8 SPC_Memory[0x10000];
 
+extern u8* SPC_IOPorts;
+
 	
 void SPC_Reset();
 void SPC_Run();
+
+u8 SPC_IORead8(u16 addr);
+void SPC_IOWrite8(u16 addr, u8 val);
 
 #endif

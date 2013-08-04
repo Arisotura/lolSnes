@@ -31,20 +31,31 @@ SPC_Memory:
 	
 @ --- General purpose read/write ----------------------------------------------
 
-.macro MemRead8
-@ TODO
+.macro MemRead8 addr=r0
+	bic r3, \addr, #0x000F
+	cmp r3, #0x00F0
+	ldrneb r0, [memory, \addr]
+	.ifnc \addr, r0
+		moveq r0, \addr
+	.endif
+	bleq SPC_IORead8
 .endm
 
 .macro MemRead16
 @ TODO
 .endm
 
-.macro MemRead24
-@ TODO (is it even needed?)
-.endm
-
-.macro MemWrite8
-@ TODO
+.macro MemWrite8 addr=r0, val=r1
+	bic r3, \addr, #0x000F
+	cmp r3, #0x00F0
+	strneb \val, [memory, \addr]
+	.ifnc \addr, r0
+		moveq r0, \addr
+	.endif
+	.ifnc \val, r1
+		moveq r1, \val
+	.endif
+	bleq SPC_IOWrite8
 .endm
 
 .macro MemWrite16
@@ -72,20 +83,18 @@ SPC_Memory:
 .endm
 
 @ --- Prefetch ----------------------------------------------------------------
-@ assume that prefetches always occur in system RAM or cached ROM
-@ (anything that modifies PBR will also update the ROM caches)
 
-.macro Prefetch8
-	ldrb r0, [memory, spcPC, lsr #0x10]
+.macro Prefetch8 dst=r0
+	ldrb \dst, [memory, spcPC, lsr #0x10]
 	add spcPC, spcPC, #0x10000
 .endm
 
-.macro Prefetch16
-	ldrb r0, [memory, spcPC, lsr #0x10]
+.macro Prefetch16 dst=r0
+	ldrb \dst, [memory, spcPC, lsr #0x10]
 	add spcPC, spcPC, #0x10000
 	ldrb r3, [memory, spcPC, lsr #0x10]
 	add spcPC, spcPC, #0x10000
-	orr r0, r0, r3, lsl #0x8
+	orr \dst, \dst, r3, lsl #0x8
 .endm
 
 @ --- Opcode tables -----------------------------------------------------------
@@ -94,7 +103,7 @@ OpTableStart:
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@0
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@1
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_DEC_X, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@2
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@3
@@ -106,18 +115,18 @@ OpTableStart:
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@6
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@7
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_CMP_DP_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@8
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_DP_Imm
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@9
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@A
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@B
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_SP_X, OP_UNK, OP_UNK
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@C
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_mX_A, OP_UNK	@C
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_X_Imm, OP_UNK, OP_UNK
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@D
+	.long OP_BNE, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@D
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@E
 	.long OP_MOV_A_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
@@ -202,7 +211,20 @@ op_return:
 	
 @ --- Addressing modes --------------------------------------------------------
 
-@ todo
+.macro GetOp_Imm dst=r0
+	Prefetch8 \dst
+.endm
+
+.macro GetAddr_DP dst=r0
+	Prefetch8 \dst
+	tst spcPSW, #flagP
+	orrne \dst, \dst, #0x100
+.endm
+
+.macro GetOp_DP
+	GetAddr_DP r0
+	MemRead8 r0
+.endm
 
 @ --- Unknown opcode ----------------------------------------------------------
 
@@ -210,10 +232,60 @@ OP_UNK:
 	@swi #0xBEEF
 	b OP_UNK
 	
+@ --- Branch ------------------------------------------------------------------
+
+.macro BRANCH cb, cnb=0, flag=0, cond=0
+	.ifne \flag
+		tst spcPSW, #\flag
+		.ifeq \cond
+			beq 1f
+		.else
+			bne 1f
+		.endif
+			add spcPC, spcPC, #0x10000
+			AddCycles \cnb
+			b op_return
+1:
+	.endif
+	GetOp_Imm
+	mov r0, r0, lsl #0x18
+	add spcPC, spcPC, r0, asr #0x8
+	AddCycles \cb
+	b op_return
+.endm
+
+OP_BNE:
+	BRANCH 4, 2, flagZ, 0
+
+@ --- CMP ---------------------------------------------------------------------
+
+OP_CMP_DP_Imm:
+	GetOp_Imm r1
+	GetOp_DP
+	cmp r0, r1
+	bic spcPSW, spcPSW, #flagNZC
+	orreq spcPSW, spcPSW, #flagZ
+	orrge spcPSW, spcPSW, #flagC
+	orrlt spcPSW, spcPSW, #flagN
+	AddCycles 5
+	b op_return
+	
+@ --- DEC ---------------------------------------------------------------------
+
+OP_DEC_X:
+	subs spcX, spcX, #1
+	orreq spcPSW, spcPSW, #flagZ
+	bicne spcPSW, spcPSW, #flagZ
+	tst spcX, #0x80
+	orrne spcPSW, spcPSW, #flagN
+	biceq spcPSW, spcPSW, #flagN
+	AddCycles 2
+	b op_return
+	
 @ --- MOV ---------------------------------------------------------------------
 
 OP_MOV_A_Imm:
-	Prefetch8
+	GetOp_Imm
 	movs spcA, r0
 	orreq spcPSW, spcPSW, #flagZ
 	bicne spcPSW, spcPSW, #flagZ
@@ -224,7 +296,7 @@ OP_MOV_A_Imm:
 	b op_return
 
 OP_MOV_X_Imm:
-	Prefetch8
+	GetOp_Imm
 	movs spcX, r0
 	orreq spcPSW, spcPSW, #flagZ
 	bicne spcPSW, spcPSW, #flagZ
@@ -237,4 +309,16 @@ OP_MOV_X_Imm:
 OP_MOV_SP_X:
 	orr spcSP, spcX, #0x100
 	AddCycles 2
+	b op_return
+	
+OP_MOV_mX_A:
+	MemWrite8 spcX, spcA
+	AddCycles 4
+	b op_return
+
+OP_MOV_DP_Imm:
+	GetOp_Imm r1
+	GetAddr_DP r0
+	MemWrite8
+	AddCycles 5
 	b op_return

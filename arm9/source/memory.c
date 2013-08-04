@@ -53,6 +53,10 @@ u32 Mem_PtrTable[0x800] DTCM_BSS;
 //u8 Mem_TimingTable[0x800] DTCM_BSS;
 
 
+u8 _SPC_IOPorts[8] = {0,0,0,0, 0,0,0,0};
+u8* SPC_IOPorts;
+
+
 bool ROM_CheckHeader(u32 offset)
 {
 	if ((offset + 0x20) >= ROM_FileSize)
@@ -599,6 +603,12 @@ void Mem_Reset()
 			for (a = 0; a < 0x10000; a += 0x2000)
 				MEM_PTR(0x7E + b, a) = MEM_PTR(0xFE + b, a) = MPTR_SLOW | (u32)&Mem_SysRAM[(b << 16) + a];
 	}
+	
+	// get uncached address
+	SPC_IOPorts = (u8*)((u32)(&_SPC_IOPorts[0]) | 0x00400000);
+	iprintf("SPC IO = %08X\n", SPC_IOPorts);
+	fifoSendValue32(FIFO_USER_01, 3);
+	fifoSendAddress(FIFO_USER_01, SPC_IOPorts);
 	
 	PPU_Reset();
 }

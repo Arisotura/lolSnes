@@ -90,6 +90,7 @@ CPU_Regs:
 	subne snesCycles, snesCycles, #0x180000
 	tst r3, #0x20000000
 	bne 1f
+		bic r3, r3, #0xF0000000
 		mov r0, r0, lsl #0x13
 		add r3, r3, r0, lsr #0x13
 		ldrb r0, [r3]

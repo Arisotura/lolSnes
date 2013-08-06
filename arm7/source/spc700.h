@@ -46,6 +46,8 @@ void SPC_Reset();
 void SPC_Run();
 
 u8 SPC_IORead8(u16 addr);
+u16 SPC_IORead16(u16 addr);
 void SPC_IOWrite8(u16 addr, u8 val);
+void SPC_IOWrite16(u16 addr, u16 val);
 
 #endif

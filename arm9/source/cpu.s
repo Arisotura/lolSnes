@@ -669,8 +669,6 @@ newline:
 			
 emuloop:
 				OpcodePrefetch8
-				@tst snesPC, #0x80000000
-				@swine #0xBEEF
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:

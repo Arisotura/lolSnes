@@ -604,6 +604,8 @@ void Mem_Reset()
 				MEM_PTR(0x7E + b, a) = MEM_PTR(0xFE + b, a) = MPTR_SLOW | (u32)&Mem_SysRAM[(b << 16) + a];
 	}
 	
+	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
+	
 	// get uncached address
 	SPC_IOPorts = (u8*)((u32)(&_SPC_IOPorts[0]) | 0x00400000);
 	iprintf("SPC IO = %08X\n", SPC_IOPorts);
@@ -685,7 +687,11 @@ ITCM_CODE void Mem_IOWrite16(u32 addr, u32 val)
 }*/
 
 
+u32 ROM_ReadBuffer;
+
 // (slow) uncached ROM read
+// potential optimization: detect sequential reads to avoid
+// seeking every time
 ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 {
 	if (fileaddr >= ROM_FileSize)
@@ -693,12 +699,11 @@ ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 	
 	asm("stmdb sp!, {r12}");
 
-	u8 val;
 	fseek(ROM_File, fileaddr, SEEK_SET);
-	fread(&val, 1, 1, ROM_File);
+	fread(&ROM_ReadBuffer, 1, 1, ROM_File);
 
 	asm("ldmia sp!, {r12}");
-	return val;
+	return ROM_ReadBuffer & 0xFF;
 }
 
 ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
@@ -708,12 +713,11 @@ ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
 	
 	asm("stmdb sp!, {r12}");
 
-	u16 val;
 	fseek(ROM_File, fileaddr, SEEK_SET);
-	fread(&val, 2, 1, ROM_File);
-
+	fread(&ROM_ReadBuffer, 2, 1, ROM_File);
+	
 	asm("ldmia sp!, {r12}");
-	return val;
+	return ROM_ReadBuffer & 0xFFFF;
 }
 
 ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
@@ -723,12 +727,11 @@ ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
 	
 	asm("stmdb sp!, {r12}");
 
-	u32 val;
 	fseek(ROM_File, fileaddr, SEEK_SET);
-	fread(&val, 4, 1, ROM_File);
+	fread(&ROM_ReadBuffer, 3, 1, ROM_File);
 
 	asm("ldmia sp!, {r12}");
-	return val & 0x00FFFFFF;
+	return ROM_ReadBuffer & 0x00FFFFFF;
 }
 
 

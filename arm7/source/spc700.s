@@ -2,6 +2,7 @@
 .arm
 
 @ --- TODO --------------------------------------------------------------------
+@ * emulate dummy reads (trigger read-sensitive IO ports)
 @
 @ search the code for 'todo' for more
 @ -----------------------------------------------------------------------------
@@ -41,12 +42,24 @@ SPC_Memory:
 	bleq SPC_IORead8
 .endm
 
-.macro MemRead16
-@ TODO
+.macro MemRead16 addr=r0
+	bic r3, \addr, #0x000F
+	cmp r3, #0x00F0
+	addne r3, memory, \addr
+	ldrneb r0, [r3]
+	ldrneb r3, [r3, #0x1]
+	orrne r0, r0, r3, lsl #0x8
+	.ifnc \addr, r0
+		moveq r0, \addr
+	.endif
+	bleq SPC_IORead16
 .endm
 
 .macro MemWrite8 addr=r0, val=r1
 	bic r3, \addr, #0x000F
+	ldr r12, =0xFFC0
+	cmp r3, r12
+	beq 1f
 	cmp r3, #0x00F0
 	strneb \val, [memory, \addr]
 	.ifnc \addr, r0
@@ -56,10 +69,27 @@ SPC_Memory:
 		moveq r1, \val
 	.endif
 	bleq SPC_IOWrite8
+1:
 .endm
 
-.macro MemWrite16
-@ TODO
+.macro MemWrite16 addr=r0, val=r1
+	bic r3, \addr, #0x000F
+	ldr r12, =0xFFC0
+	cmp r3, r12
+	beq 1f
+	cmp r3, #0x00F0
+	addne r3, memory, \addr
+	strneb \val, [r3]
+	movne \val, \val, lsr #0x8
+	strneb \val, [r3, #0x1]
+	.ifnc \addr, r0
+		moveq r0, \addr
+	.endif
+	.ifnc \val, r1
+		moveq r1, \val
+	.endif
+	bleq SPC_IOWrite16
+1:
 .endm
 
 @ --- Stack read/write --------------------------------------------------------
@@ -100,38 +130,38 @@ SPC_Memory:
 @ --- Opcode tables -----------------------------------------------------------
 
 OpTableStart:
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@0
+	.long OP_NOP, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@0
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@1
+	.long OP_BPL, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@1
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_DEC_X, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@2
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_BRA
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@3
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_INC_X, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@4
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@5
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_X_A, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@6
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@7
-	.long OP_CMP_DP_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_CMP_DP_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_CMP_Y_DP, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@8
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_DP_Imm
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@9
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_DEC_A, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@A
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_INC_DP, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@B
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_SP_X, OP_UNK, OP_UNK
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_mX_A, OP_UNK	@C
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_X_Imm, OP_UNK, OP_UNK
-	.long OP_BNE, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@D
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@E
-	.long OP_MOV_A_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_MOVW_YA_DP, OP_UNK, OP_INC_A, OP_MOV_SP_X, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_DP_A, OP_UNK, OP_MOV_mX_A, OP_UNK	@C
+	.long OP_UNK, OP_UNK, OP_UNK, OP_MOV_DP_Y, OP_UNK, OP_MOV_X_Imm, OP_UNK, OP_UNK
+	.long OP_BNE, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_m_Y_A	@D
+	.long OP_MOV_DP_X, OP_UNK, OP_MOVW_DP_YA, OP_UNK, OP_DEC_Y, OP_MOV_A_Y, OP_UNK, OP_UNK
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_A_DP, OP_UNK, OP_UNK, OP_UNK	@E
+	.long OP_MOV_A_Imm, OP_UNK, OP_UNK, OP_MOV_Y_DP, OP_UNK, OP_UNK, OP_UNK, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@F
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK
+	.long OP_MOV_X_DP, OP_UNK, OP_UNK, OP_UNK, OP_INC_Y, OP_UNK, OP_UNK, OP_UNK
 
 @ --- Misc. functions ---------------------------------------------------------
 
@@ -226,6 +256,23 @@ op_return:
 	MemRead8 r0
 .endm
 
+.macro GetAddr_mX
+	tst spcPSW, #flagP
+	moveq r0, spcX
+	orrne r0, spcX, #0x100
+.endm
+
+.macro GetAddr_m_Y
+	Prefetch8
+	MemRead16
+	add r0, r0, spcY
+.endm
+
+.macro GetOp_m_Y
+	GetAddr_m_Y
+	MemRead8
+.endm
+
 @ --- Unknown opcode ----------------------------------------------------------
 
 OP_UNK:
@@ -259,54 +306,177 @@ OP_BRA:
 
 OP_BNE:
 	BRANCH 4, 2, flagZ, 0
+	
+OP_BPL:
+	BRANCH 4, 2, flagN, 0
 
 @ --- CMP ---------------------------------------------------------------------
 
-OP_CMP_DP_Imm:
-	GetOp_Imm r1
-	GetOp_DP
-	cmp r0, r1
+.macro DO_CMP a, b
+	cmp \a, \b
 	bic spcPSW, spcPSW, #flagNZC
 	orreq spcPSW, spcPSW, #flagZ
 	orrge spcPSW, spcPSW, #flagC
 	orrlt spcPSW, spcPSW, #flagN
+.endm
+
+OP_CMP_DP_Imm:
+	GetOp_Imm r1
+	GetOp_DP
+	DO_CMP r0, r1
 	AddCycles 5
+	b op_return
+	
+OP_CMP_Y_DP:
+	GetOp_DP
+	DO_CMP spcY, r0
+	AddCycles 3
 	b op_return
 	
 @ --- DEC ---------------------------------------------------------------------
 
-OP_DEC_X:
-	subs spcX, spcX, #1
+.macro DO_DEC dst
+	sub \dst, \dst, #1
+	ands \dst, \dst, #0xFF
 	orreq spcPSW, spcPSW, #flagZ
 	bicne spcPSW, spcPSW, #flagZ
-	tst spcX, #0x80
+	tst \dst, #0x80
 	orrne spcPSW, spcPSW, #flagN
 	biceq spcPSW, spcPSW, #flagN
+	AddCycles 2
+	b op_return
+.endm
+
+OP_DEC_A:
+	DO_DEC spcA
+
+OP_DEC_X:
+	DO_DEC spcX
+	
+OP_DEC_Y:
+	DO_DEC spcY
+	
+@ --- INC ---------------------------------------------------------------------
+
+.macro DO_INC dst
+	add \dst, \dst, #1
+	ands \dst, \dst, #0xFF
+	orreq spcPSW, spcPSW, #flagZ
+	bicne spcPSW, spcPSW, #flagZ
+	tst \dst, #0x80
+	orrne spcPSW, spcPSW, #flagN
+	biceq spcPSW, spcPSW, #flagN
+.endm
+
+OP_INC_A:
+	DO_INC spcA
+	AddCycles 2
+	b op_return
+	
+OP_INC_DP:
+	GetAddr_DP r2
+	MemRead8 r2
+	DO_INC r0
+	mov r1, r0
+	mov r0, r2
+	MemWrite8
+	AddCycles 4
+	b op_return
+
+OP_INC_X:
+	DO_INC spcX
+	AddCycles 2
+	b op_return
+
+OP_INC_Y:
+	DO_INC spcY
 	AddCycles 2
 	b op_return
 	
 @ --- MOV ---------------------------------------------------------------------
 
-OP_MOV_A_Imm:
-	GetOp_Imm
-	movs spcA, r0
+.macro DO_MOV dst, src
+	movs \dst, \src
 	orreq spcPSW, spcPSW, #flagZ
 	bicne spcPSW, spcPSW, #flagZ
-	tst spcA, #0x80
+	tst \dst, #0x80
 	orrne spcPSW, spcPSW, #flagN
 	biceq spcPSW, spcPSW, #flagN
-	AddCycles 2
+.endm
+
+OP_MOV_A_DP:
+	GetOp_DP
+	DO_MOV spcA, r0
+	AddCycles 3
 	b op_return
 
+OP_MOV_A_Imm:
+	GetOp_Imm
+	DO_MOV spcA, r0
+	AddCycles 2
+	b op_return
+	
+OP_MOV_A_Y:
+	DO_MOV spcA, spcY
+	AddCycles 2
+	b op_return
+	
+OP_MOV_DP_Imm:
+	GetOp_Imm r1
+	GetAddr_DP r0
+	MemWrite8
+	AddCycles 5
+	b op_return
+	
+OP_MOV_DP_A:
+	GetAddr_DP
+	mov r1, spcA
+	MemWrite8
+	AddCycles 4
+	b op_return
+	
+OP_MOV_DP_X:
+	GetAddr_DP
+	mov r1, spcX
+	MemWrite8
+	AddCycles 4
+	b op_return
+	
+OP_MOV_DP_Y:
+	GetAddr_DP
+	mov r1, spcY
+	MemWrite8
+	AddCycles 4
+	b op_return
+	
+OP_MOV_m_Y_A:
+	GetAddr_m_Y
+	mov r1, spcA
+	MemWrite8
+	AddCycles 7
+	b op_return
+	
+OP_MOV_X_A:
+	DO_MOV spcX, spcA
+	AddCycles 2
+	b op_return
+	
+OP_MOV_X_DP:
+	GetOp_DP
+	DO_MOV spcX, r0
+	AddCycles 3
+	b op_return
+	
 OP_MOV_X_Imm:
 	GetOp_Imm
-	movs spcX, r0
-	orreq spcPSW, spcPSW, #flagZ
-	bicne spcPSW, spcPSW, #flagZ
-	tst spcX, #0x80
-	orrne spcPSW, spcPSW, #flagN
-	biceq spcPSW, spcPSW, #flagN
+	DO_MOV spcX, r0
 	AddCycles 2
+	b op_return
+	
+OP_MOV_Y_DP:
+	GetOp_DP
+	DO_MOV spcY, r0
+	AddCycles 3
 	b op_return
 	
 OP_MOV_SP_X:
@@ -315,13 +485,36 @@ OP_MOV_SP_X:
 	b op_return
 	
 OP_MOV_mX_A:
-	MemWrite8 spcX, spcA
+	GetAddr_mX
+	MemWrite8 r0, spcA
 	AddCycles 4
 	b op_return
+	
+@ --- MOVW --------------------------------------------------------------------
 
-OP_MOV_DP_Imm:
-	GetOp_Imm r1
-	GetAddr_DP r0
-	MemWrite8
+OP_MOVW_YA_DP:
+	GetAddr_DP
+	MemRead16
+	cmp r0, #0
+	orreq spcPSW, spcPSW, #flagZ
+	bicne spcPSW, spcPSW, #flagZ
+	tst r0, #0x8000
+	orrne spcPSW, spcPSW, #flagN
+	biceq spcPSW, spcPSW, #flagN
+	and spcA, r0, #0xFF
+	mov spcY, r0, lsr #0x8
 	AddCycles 5
+	b op_return
+
+OP_MOVW_DP_YA:
+	GetAddr_DP
+	orr r1, spcA, spcY, lsl #0x8
+	MemWrite16
+	AddCycles 5
+	b op_return
+	
+@ --- NOP ---------------------------------------------------------------------
+
+OP_NOP:
+	AddCycles 2
 	b op_return

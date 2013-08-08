@@ -21,10 +21,12 @@ u32 ROM_FileSize DTCM_BSS;
 u8 ROM_CodeCache[0x10000];
 u32 ROM_DataCacheBank DTCM_DATA = 0x100;
 u8 ROM_DataCache[0x10000];*/
-u8 ROM_Bank0[0x8000];
-u8* ROM_Cache[8] DTCM_BSS;
-u8 ROM_CacheBank[8] DTCM_BSS;
+u8* ROM_Bank0;
+u8* ROM_Bank0End;
+u8* ROM_Cache[2 + ROMCACHE_SIZE] DTCM_BSS;
+int ROM_CacheBank[2 + ROMCACHE_SIZE] DTCM_BSS;
 u8 ROM_CacheIndex DTCM_BSS;
+int ROM_CacheInited = 0;
 
 //void (*ROM_CacheCode)(u32 bank) DTCM_BSS;
 //void (*ROM_CacheData)(u32 bank) DTCM_BSS;
@@ -70,264 +72,6 @@ bool ROM_CheckHeader(u32 offset)
 	
 	return (chkcomp ^ chksum) == 0xFFFF;
 }
-
-/*ITCM_CODE void ROM_CacheCode_LoROM(u32 bank)
-{
-	bank &= 0x7F;
-	if (bank >= 0x7D) return;
-
-	register u32 oldbank = ROM_CodeCacheBank;
-	if (bank == oldbank) return;
-	if (bank == ROM_DataCacheBank) return;
-	register u32 base = ROM_BaseOffset;
-
-	if (oldbank != 0x100)
-	{
-		if (oldbank >= 0x40)
-		{
-			MEM_PTR(oldbank, 0x0000) = MEM_PTR(0x80 + oldbank, 0x0000) = 0x80000000 | (base + (oldbank << 15) + 0x0000);
-			MEM_PTR(oldbank, 0x2000) = MEM_PTR(0x80 + oldbank, 0x2000) = 0x80000000 | (base + (oldbank << 15) + 0x2000);
-			MEM_PTR(oldbank, 0x4000) = MEM_PTR(0x80 + oldbank, 0x4000) = 0x80000000 | (base + (oldbank << 15) + 0x4000);
-			MEM_PTR(oldbank, 0x6000) = MEM_PTR(0x80 + oldbank, 0x6000) = 0x80000000 | (base + (oldbank << 15) + 0x6000);
-		}
-
-		MEM_PTR(oldbank, 0x8000) = MEM_PTR(0x80 + oldbank, 0x8000) = 0x80000000 | (base + (oldbank << 15) + 0x0000);
-		MEM_PTR(oldbank, 0xA000) = MEM_PTR(0x80 + oldbank, 0xA000) = 0x80000000 | (base + (oldbank << 15) + 0x2000);
-		MEM_PTR(oldbank, 0xC000) = MEM_PTR(0x80 + oldbank, 0xC000) = 0x80000000 | (base + (oldbank << 15) + 0x4000);
-		MEM_PTR(oldbank, 0xE000) = MEM_PTR(0x80 + oldbank, 0xE000) = 0x80000000 | (base + (oldbank << 15) + 0x6000);
-	}
-
-	fseek(ROM_File, base + (bank << 15), SEEK_SET);
-	fread(ROM_CodeCache, 0x8000, 1, ROM_File);
-
-	if (bank >= 0x40)
-	{
-		MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = (u32)&ROM_CodeCache[0x0000];
-		MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = (u32)&ROM_CodeCache[0x2000];
-		MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = (u32)&ROM_CodeCache[0x4000];
-		MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = (u32)&ROM_CodeCache[0x6000];
-	}
-
-	MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = (u32)&ROM_CodeCache[0x0000];
-	MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = (u32)&ROM_CodeCache[0x2000];
-	MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = (u32)&ROM_CodeCache[0x4000];
-	MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = (u32)&ROM_CodeCache[0x6000];
-
-	ROM_CodeCacheBank = bank;
-}
-
-ITCM_CODE void ROM_CacheCode_HiROM(u32 bank)
-{
-	if (bank >= 0x7E && bank < 0xFE) return;
-
-	register u32 oldbank = ROM_CodeCacheBank;
-	if (bank == oldbank) return;
-	if (bank == ROM_DataCacheBank) return;
-	register u32 base = ROM_BaseOffset;
-
-	if (oldbank != 0x100)
-	{
-		if (oldbank < 0x40)
-		{
-			MEM_PTR(oldbank, 0x8000) = MEM_PTR(0x80 + oldbank, 0x8000) = 0x80000000 | (base + (oldbank << 15) + 0x0000);
-			MEM_PTR(oldbank, 0xA000) = MEM_PTR(0x80 + oldbank, 0xA000) = 0x80000000 | (base + (oldbank << 15) + 0x2000);
-			MEM_PTR(oldbank, 0xC000) = MEM_PTR(0x80 + oldbank, 0xC000) = 0x80000000 | (base + (oldbank << 15) + 0x4000);
-			MEM_PTR(oldbank, 0xE000) = MEM_PTR(0x80 + oldbank, 0xE000) = 0x80000000 | (base + (oldbank << 15) + 0x6000);
-		}
-		else if (oldbank < 0x7E)
-		{
-			MEM_PTR(oldbank, 0x0000) = MEM_PTR(0x80 + oldbank, 0x0000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x0000);
-			MEM_PTR(oldbank, 0x2000) = MEM_PTR(0x80 + oldbank, 0x2000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x2000);
-			MEM_PTR(oldbank, 0x4000) = MEM_PTR(0x80 + oldbank, 0x4000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x4000);
-			MEM_PTR(oldbank, 0x6000) = MEM_PTR(0x80 + oldbank, 0x6000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x6000);
-			MEM_PTR(oldbank, 0x8000) = MEM_PTR(0x80 + oldbank, 0x8000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x8000);
-			MEM_PTR(oldbank, 0xA000) = MEM_PTR(0x80 + oldbank, 0xA000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0xA000);
-			MEM_PTR(oldbank, 0xC000) = MEM_PTR(0x80 + oldbank, 0xC000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0xC000);
-			MEM_PTR(oldbank, 0xE000) = MEM_PTR(0x80 + oldbank, 0xE000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0xE000);
-		}
-		else
-		{
-			MEM_PTR(oldbank, 0x0000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x0000);
-			MEM_PTR(oldbank, 0x2000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x2000);
-			MEM_PTR(oldbank, 0x4000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x4000);
-			MEM_PTR(oldbank, 0x6000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x6000);
-			MEM_PTR(oldbank, 0x8000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x8000);
-			MEM_PTR(oldbank, 0xA000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0xA000);
-			MEM_PTR(oldbank, 0xC000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0xC000);
-			MEM_PTR(oldbank, 0xE000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0xE000);
-		}
-	}
-
-	if (bank < 0x40)
-	{
-		fseek(ROM_File, base + (bank << 15), SEEK_SET);
-		fread(ROM_CodeCache, 0x8000, 1, ROM_File);
-		
-		MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = (u32)&ROM_CodeCache[0x0000];
-		MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = (u32)&ROM_CodeCache[0x2000];
-		MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = (u32)&ROM_CodeCache[0x4000];
-		MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = (u32)&ROM_CodeCache[0x6000];
-	}
-	else if (bank < 0x7E)
-	{
-		fseek(ROM_File, base + ((bank - 0x40) << 16), SEEK_SET);
-		fread(ROM_CodeCache, 0x10000, 1, ROM_File);
-
-		MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = (u32)&ROM_CodeCache[0x0000];
-		MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = (u32)&ROM_CodeCache[0x2000];
-		MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = (u32)&ROM_CodeCache[0x4000];
-		MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = (u32)&ROM_CodeCache[0x6000];
-		MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = (u32)&ROM_CodeCache[0x8000];
-		MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = (u32)&ROM_CodeCache[0xA000];
-		MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = (u32)&ROM_CodeCache[0xC000];
-		MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = (u32)&ROM_CodeCache[0xE000];
-	}
-	else
-	{
-		fseek(ROM_File, base + ((bank - 0xC0) << 16), SEEK_SET);
-		fread(ROM_CodeCache, 0x10000, 1, ROM_File);
-
-		MEM_PTR(bank, 0x0000) = (u32)&ROM_CodeCache[0x0000];
-		MEM_PTR(bank, 0x2000) = (u32)&ROM_CodeCache[0x2000];
-		MEM_PTR(bank, 0x4000) = (u32)&ROM_CodeCache[0x4000];
-		MEM_PTR(bank, 0x6000) = (u32)&ROM_CodeCache[0x6000];
-		MEM_PTR(bank, 0x8000) = (u32)&ROM_CodeCache[0x8000];
-		MEM_PTR(bank, 0xA000) = (u32)&ROM_CodeCache[0xA000];
-		MEM_PTR(bank, 0xC000) = (u32)&ROM_CodeCache[0xC000];
-		MEM_PTR(bank, 0xE000) = (u32)&ROM_CodeCache[0xE000];
-	}
-
-	ROM_CodeCacheBank = bank;
-}
-
-ITCM_CODE void ROM_CacheData_LoROM(u32 bank)
-{
-	bank &= 0x7F;
-	if (bank >= 0x7D) return;
-
-	register u32 oldbank = ROM_DataCacheBank;
-	if (bank == oldbank) return;
-	if (bank == ROM_CodeCacheBank) return;
-	register u32 base = ROM_BaseOffset;
-
-	if (oldbank != 0x100)
-	{
-		if (oldbank >= 0x40)
-		{
-			MEM_PTR(oldbank, 0x0000) = MEM_PTR(0x80 + oldbank, 0x0000) = 0x80000000 | (base + (oldbank << 15) + 0x0000);
-			MEM_PTR(oldbank, 0x2000) = MEM_PTR(0x80 + oldbank, 0x2000) = 0x80000000 | (base + (oldbank << 15) + 0x2000);
-			MEM_PTR(oldbank, 0x4000) = MEM_PTR(0x80 + oldbank, 0x4000) = 0x80000000 | (base + (oldbank << 15) + 0x4000);
-			MEM_PTR(oldbank, 0x6000) = MEM_PTR(0x80 + oldbank, 0x6000) = 0x80000000 | (base + (oldbank << 15) + 0x6000);
-		}
-
-		MEM_PTR(oldbank, 0x8000) = MEM_PTR(0x80 + oldbank, 0x8000) = 0x80000000 | (base + (oldbank << 15) + 0x0000);
-		MEM_PTR(oldbank, 0xA000) = MEM_PTR(0x80 + oldbank, 0xA000) = 0x80000000 | (base + (oldbank << 15) + 0x2000);
-		MEM_PTR(oldbank, 0xC000) = MEM_PTR(0x80 + oldbank, 0xC000) = 0x80000000 | (base + (oldbank << 15) + 0x4000);
-		MEM_PTR(oldbank, 0xE000) = MEM_PTR(0x80 + oldbank, 0xE000) = 0x80000000 | (base + (oldbank << 15) + 0x6000);
-	}
-
-	fseek(ROM_File, base + (bank << 15), SEEK_SET);
-	fread(ROM_DataCache, 0x8000, 1, ROM_File);
-
-	if (bank >= 0x40)
-	{
-		MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = (u32)&ROM_DataCache[0x0000];
-		MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = (u32)&ROM_DataCache[0x2000];
-		MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = (u32)&ROM_DataCache[0x4000];
-		MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = (u32)&ROM_DataCache[0x6000];
-	}
-
-	MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = (u32)&ROM_DataCache[0x0000];
-	MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = (u32)&ROM_DataCache[0x2000];
-	MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = (u32)&ROM_DataCache[0x4000];
-	MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = (u32)&ROM_DataCache[0x6000];
-
-	ROM_DataCacheBank = bank;
-}
-
-ITCM_CODE void ROM_CacheData_HiROM(u32 bank)
-{
-	if (bank >= 0x7E && bank < 0xFE) return;
-
-	register u32 oldbank = ROM_DataCacheBank;
-	if (bank == oldbank) return;
-	if (bank == ROM_CodeCacheBank) return;
-	register u32 base = ROM_BaseOffset;
-
-	if (oldbank != 0x100)
-	{
-		if (oldbank < 0x40)
-		{
-			MEM_PTR(oldbank, 0x8000) = MEM_PTR(0x80 + oldbank, 0x8000) = 0x80000000 | (base + (oldbank << 15) + 0x0000);
-			MEM_PTR(oldbank, 0xA000) = MEM_PTR(0x80 + oldbank, 0xA000) = 0x80000000 | (base + (oldbank << 15) + 0x2000);
-			MEM_PTR(oldbank, 0xC000) = MEM_PTR(0x80 + oldbank, 0xC000) = 0x80000000 | (base + (oldbank << 15) + 0x4000);
-			MEM_PTR(oldbank, 0xE000) = MEM_PTR(0x80 + oldbank, 0xE000) = 0x80000000 | (base + (oldbank << 15) + 0x6000);
-		}
-		else if (oldbank < 0x7E)
-		{
-			MEM_PTR(oldbank, 0x0000) = MEM_PTR(0x80 + oldbank, 0x0000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x0000);
-			MEM_PTR(oldbank, 0x2000) = MEM_PTR(0x80 + oldbank, 0x2000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x2000);
-			MEM_PTR(oldbank, 0x4000) = MEM_PTR(0x80 + oldbank, 0x4000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x4000);
-			MEM_PTR(oldbank, 0x6000) = MEM_PTR(0x80 + oldbank, 0x6000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x6000);
-			MEM_PTR(oldbank, 0x8000) = MEM_PTR(0x80 + oldbank, 0x8000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0x8000);
-			MEM_PTR(oldbank, 0xA000) = MEM_PTR(0x80 + oldbank, 0xA000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0xA000);
-			MEM_PTR(oldbank, 0xC000) = MEM_PTR(0x80 + oldbank, 0xC000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0xC000);
-			MEM_PTR(oldbank, 0xE000) = MEM_PTR(0x80 + oldbank, 0xE000) = 0x80000000 | (base + ((oldbank - 0x40) << 16) + 0xE000);
-		}
-		else
-		{
-			MEM_PTR(oldbank, 0x0000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x0000);
-			MEM_PTR(oldbank, 0x2000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x2000);
-			MEM_PTR(oldbank, 0x4000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x4000);
-			MEM_PTR(oldbank, 0x6000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x6000);
-			MEM_PTR(oldbank, 0x8000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0x8000);
-			MEM_PTR(oldbank, 0xA000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0xA000);
-			MEM_PTR(oldbank, 0xC000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0xC000);
-			MEM_PTR(oldbank, 0xE000) = 0x80000000 | (base + ((oldbank - 0xC0) << 16) + 0xE000);
-		}
-	}
-
-	if (bank < 0x40)
-	{
-		fseek(ROM_File, base + (bank << 15), SEEK_SET);
-		fread(ROM_DataCache, 0x8000, 1, ROM_File);
-		
-		MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = (u32)&ROM_DataCache[0x0000];
-		MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = (u32)&ROM_DataCache[0x2000];
-		MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = (u32)&ROM_DataCache[0x4000];
-		MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = (u32)&ROM_DataCache[0x6000];
-	}
-	else if (bank < 0x7E)
-	{
-		fseek(ROM_File, base + ((bank - 0x40) << 16), SEEK_SET);
-		fread(ROM_DataCache, 0x10000, 1, ROM_File);
-
-		MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = (u32)&ROM_DataCache[0x0000];
-		MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = (u32)&ROM_DataCache[0x2000];
-		MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = (u32)&ROM_DataCache[0x4000];
-		MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = (u32)&ROM_DataCache[0x6000];
-		MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = (u32)&ROM_DataCache[0x8000];
-		MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = (u32)&ROM_DataCache[0xA000];
-		MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = (u32)&ROM_DataCache[0xC000];
-		MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = (u32)&ROM_DataCache[0xE000];
-	}
-	else
-	{
-		fseek(ROM_File, base + ((bank - 0xC0) << 16), SEEK_SET);
-		fread(ROM_DataCache, 0x10000, 1, ROM_File);
-
-		MEM_PTR(bank, 0x0000) = (u32)&ROM_DataCache[0x0000];
-		MEM_PTR(bank, 0x2000) = (u32)&ROM_DataCache[0x2000];
-		MEM_PTR(bank, 0x4000) = (u32)&ROM_DataCache[0x4000];
-		MEM_PTR(bank, 0x6000) = (u32)&ROM_DataCache[0x6000];
-		MEM_PTR(bank, 0x8000) = (u32)&ROM_DataCache[0x8000];
-		MEM_PTR(bank, 0xA000) = (u32)&ROM_DataCache[0xA000];
-		MEM_PTR(bank, 0xC000) = (u32)&ROM_DataCache[0xC000];
-		MEM_PTR(bank, 0xE000) = (u32)&ROM_DataCache[0xE000];
-	}
-
-	ROM_DataCacheBank = bank;
-}*/
 
 void ROM_DoUncacheBank(int bank)
 {
@@ -386,20 +130,28 @@ void ROM_DoUncacheBank(int bank)
 	}
 }
 
-void ROM_DoCacheBank(int bank)
+void _ROM_DoCacheBank(int bank, int type)
 {
-	asm("stmdb sp!, {r12}");
+	u8 idx;
+	if (bank >= 32)
+	{
+		if (type == 1) idx = ROMCACHE_SIZE;
+		else if (type == 2) idx = ROMCACHE_SIZE + 1;
+		else return;
+	}
+	else
+		idx = bank;
 
-	u8 idx = ROM_CacheIndex;
-
-	u8 oldbank = ROM_CacheBank[idx];
-	if (oldbank != 0)
+	int oldbank = ROM_CacheBank[idx];
+	if (oldbank == bank)
+		return;
+	if (oldbank != -1)
 		ROM_DoUncacheBank(oldbank);
 
 	ROM_CacheBank[idx] = bank;
 	if (!ROM_Cache[idx])
-		ROM_Cache[idx] = malloc(Mem_HiROM ? 0x10000 : 0x8000);
-	
+		ROM_Cache[idx] = malloc((Mem_HiROM && bank >= 0x40) ? 0x10000 : 0x8000);
+
 	u8* ptr = ROM_Cache[idx];
 	u32 base = ROM_BaseOffset;
 	if (Mem_HiROM)
@@ -464,11 +216,17 @@ void ROM_DoCacheBank(int bank)
 		MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
 	}
 
-	idx++;
-	idx &= 7;
-	ROM_CacheIndex = idx;
+	//idx++;
+	//idx &= 7;
+	//if (idx >= ROMCACHE_SIZE) idx = 0;
+	//ROM_CacheIndex = idx;
+}
 
+void ROM_DoCacheBank(int bank, int type)
+{
 	asm("ldmia sp!, {r12}");
+	_ROM_DoCacheBank(bank, type);
+	asm("stmdb sp!, {r12}");
 }
 
 
@@ -529,31 +287,25 @@ void Mem_Reset()
 	for (i = 0; i < (128 * 1024); i += 4)
 		*(u32*)&Mem_SysRAM[i] = 0x55555555; // idk about this
 
-	fseek(ROM_File, ROM_BaseOffset, SEEK_SET);
-	fread(ROM_Bank0, 0x8000, 1, ROM_File);
-
-	for (i = 0; i < 8; i++)
+	//fseek(ROM_File, ROM_BaseOffset, SEEK_SET);
+	//fread(ROM_Bank0, 0x8000, 1, ROM_File);
+	
+	if (!ROM_CacheInited)
 	{
-		if (ROM_Cache[i]) free(ROM_Cache[i]);
-		ROM_CacheBank[i] = 0;
+		for (i = 0; i < 32; i++)
+			ROM_Cache[i] = 0;
+		
+		ROM_CacheInited = 0;
 	}
+
+	for (i = 0; i < 32; i++)
+		ROM_CacheBank[i] = -1;
 	ROM_CacheIndex = 0;
 
 	if (Mem_SRAM) free(Mem_SRAM);
 	Mem_SRAM = malloc(Mem_SRAMMask + 1);
 	for (i = 0; i <= Mem_SRAMMask; i += 4)
 		*(u32*)&Mem_SRAM[i] = 0;
-
-	/*if (Mem_HiROM)
-	{
-		ROM_CacheCode = ROM_CacheCode_HiROM;
-		ROM_CacheData = ROM_CacheData_HiROM;
-	}
-	else
-	{
-		ROM_CacheCode = ROM_CacheCode_LoROM;
-		ROM_CacheData = ROM_CacheData_LoROM;
-	}*/
 	
 	for (b = 0; b < 0x40; b++)
 	{
@@ -567,8 +319,8 @@ void Mem_Reset()
 			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | MPTR_SPECIAL;
 	}
 
-	for (a = 0; a < 0x8000; a += 0x2000)
-		MEM_PTR(0, 0x8000 + a) = MEM_PTR(0x80, 0x8000 + a) = MPTR_SLOW | MPTR_READONLY | (u32)&ROM_Bank0[a];
+	//for (a = 0; a < 0x8000; a += 0x2000)
+	//	MEM_PTR(0, 0x8000 + a) = MEM_PTR(0x80, 0x8000 + a) = MPTR_SLOW | MPTR_READONLY | (u32)&ROM_Bank0[a];
 
 	for (b = 1; b < 0x40; b++)
 	{
@@ -604,6 +356,18 @@ void Mem_Reset()
 				MEM_PTR(0x7E + b, a) = MEM_PTR(0xFE + b, a) = MPTR_SLOW | (u32)&Mem_SysRAM[(b << 16) + a];
 	}
 	
+	for (i = 0; i < 32; i++)
+	{
+		if ((i << 15) >= ROM_FileSize - ROM_BaseOffset)
+			break;
+		
+		_ROM_DoCacheBank(i, 0);
+	}
+	
+	ROM_Bank0 = ROM_Cache[0];
+	ROM_Bank0End = ROM_Bank0 + 0x8000;
+	
+	iprintf("mm %08X\n", (void*)Mem_ROMRead16);
 	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
 	
 	// get uncached address
@@ -614,77 +378,6 @@ void Mem_Reset()
 	
 	PPU_Reset();
 }
-
-
-/*ITCM_CODE u8 Mem_IORead8(u32 addr)
-{
-	asm("stmdb sp!, {r12}");
-
-	iprintf("IORead8 %06X\n", addr);
-
-	asm("ldmia sp!, {r12}");
-	return 0;
-}
-
-ITCM_CODE u16 Mem_IORead16(u32 addr)
-{
-	addr &= 0xFFFF;
-	switch (addr)
-	{
-	case 0x2140: return 0xBBAA; // HAXX!!!
-	}
-
-	asm("stmdb sp!, {r12}");
-	iprintf("IORead16 %06X %06X\n", addr, CPU_GetPC());
-	swiWaitForVBlank();
-	asm("ldmia sp!, {r12}");
-	return 0;
-}
-
-ITCM_CODE void Mem_IOWrite8(u32 addr, u32 val)
-{
-	//addr &= 0xFFFF;
-	//if (addr == 0x2122) return;
-
-	asm("stmdb sp!, {r12}");
-
-	//u32 pc = CPU_GetPC();
-	/*iprintf("IOWrite8 %06X %02X %06X %04X\n", addr, val, CPU_GetPC(), CPU_GetReg(10));
-	if ((addr >> 16) == 0x28)
-	{
-		printf("%08X\n", CPU_GetPC());
-		for (;;) swiWaitForVBlank();
-	}*-/
-
-	switch (addr & 0xFFFF)
-	{
-	case 0x2105: printf("MODE=%i\n", val & 0x7); break;
-	case 0x210E: printf("BG1 vscroll=%i\n", val); break;
-
-	case 0x4200:
-		asm("bic r7, r7, #0x400"); // haxx
-		printf("NMI %s\n", (val & 0x80) ? "enable" : "disable"); 
-		break;
-	}
-
-	asm("ldmia sp!, {r12}");
-}
-
-ITCM_CODE void Mem_IOWrite16(u32 addr, u32 val)
-{
-	//asm("stmdb sp!, {r12}");
-
-	//iprintf("IOWrite16 %06X %04X %06X %08X %08X\n", addr, val, CPU_GetPC(), CPU_GetReg(12), CPU_GetReg(11));
-	//swiWaitForVBlank();
-	//if ((addr >> 16) == 0x80)
-	/*if ((addr >> 16) == 0x28)
-	{
-		printf("%08X\n", CPU_GetPC());
-		for (;;) swiWaitForVBlank();
-	}*-/
-
-	//asm("ldmia sp!, {r12}");
-}*/
 
 
 u32 ROM_ReadBuffer;

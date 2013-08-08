@@ -2,7 +2,11 @@
 #ifndef _MEMORY_H_
 #define _MEMORY_H_
 
-extern u8 ROM_Bank0[0x8000];
+#define ROMCACHE_SIZE 32
+
+extern u8* ROM_Cache[2 + ROMCACHE_SIZE];
+extern u8* ROM_Bank0;
+extern u8* ROM_Bank0End;
 
 extern bool Mem_HiROM;
 extern u32 Mem_PtrTable[0x800] DTCM_BSS;
@@ -14,7 +18,7 @@ extern u32 Mem_PtrTable[0x800] DTCM_BSS;
 extern u8* SPC_IOPorts;
 
 
-void ROM_DoCacheBank(int bank);
+void ROM_DoCacheBank(int bank, int type);
 
 bool Mem_LoadROM(char* path);
 void Mem_Reset();

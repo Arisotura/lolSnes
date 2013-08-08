@@ -537,7 +537,7 @@ u16 PPU_Read16(u32 addr)
 	asm("ldmia sp!, {r12}");
 	return ret;
 }
-
+int lolz=0;
 void PPU_Write8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r12}");
@@ -637,7 +637,7 @@ void PPU_Write8(u32 addr, u8 val)
 			
 		case 0x40: SPC_IOPorts[0] = val; break;
 		case 0x41: SPC_IOPorts[1] = val; break;
-		case 0x42: SPC_IOPorts[2] = val; break;
+		case 0x42: if (val==0) iprintf("SPC block transfer done\n");SPC_IOPorts[2] = val; break;
 		case 0x43: SPC_IOPorts[3] = val; break;
 		
 		default:
@@ -661,7 +661,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&SPC_IOPorts[0] = val; break;
-		case 0x42: *(u16*)&SPC_IOPorts[2] = val; break;
+		case 0x42: iprintf("write 2142 %04X %04X %04X\n", val, *(u16*)&ROM_Cache[0xE][2], *(u16*)&ROM_Cache[0xF][2]); *(u16*)&SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

@@ -26,3 +26,4 @@ memory			.req r4		@ pointer to the memory
 .equ flagNZ,   0x82
 .equ flagNZC,  0x83
 .equ flagNVZ,  0xC2
+.equ flagVH,   0x48

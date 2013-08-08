@@ -18,11 +18,16 @@
 CPU_Regs:
 	.long 0,0,0,0,0,0,0,0,0
 	
-.equ vec_Reset, (0x10000-0xFFFC)
-.equ vec_e0_IRQ, (0x10000-0xFFEE)
-.equ vec_e1_IRQ, (0x10000-0xFFFE)
-.equ vec_e0_NMI, (0x10000-0xFFEA)
-.equ vec_e1_NMI, (0x10000-0xFFFA)
+@.equ vec_Reset, (0x10000-0xFFFC)
+@.equ vec_e0_IRQ, (0x10000-0xFFEE)
+@.equ vec_e1_IRQ, (0x10000-0xFFFE)
+@.equ vec_e0_NMI, (0x10000-0xFFEA)
+@.equ vec_e1_NMI, (0x10000-0xFFFA)
+.equ vec_Reset, 0x4
+.equ vec_e0_IRQ, 0x12
+.equ vec_e1_IRQ, 0x2
+.equ vec_e0_NMI, 0x16
+.equ vec_e1_NMI, 0x6
 	
 .equ CYCLES_PER_SCANLINE, 1364
 	
@@ -310,11 +315,13 @@ CPU_Regs:
 
 .macro UpdatePBCache
 	ands r0, snesPBR, #0xFF
+	movne r1, #1
 	blne ROM_DoCacheBank
 .endm
 
 .macro UpdateDBCache
 	ands r0, snesDBR, #0xFF
+	movne r1, #2
 	blne ROM_DoCacheBank
 .endm
 
@@ -563,12 +570,16 @@ CPU_Reset:
 	ldr memoryMap, =Mem_PtrTable
 	SetOpcodeTable
 	
-	ldr r0, =(ROM_Bank0 + 0x8000)
+	ldr r0, =ROM_Bank0End
+	ldr r0, [r0]
 	sub r0, r0, #vec_Reset
 	ldrh r0, [r0]
 	orr snesPC, snesPC, r0, lsl #0x10
 	
 	mov snesCycles, #0
+	ldr r0, =CPU_Cycles
+	mov r1, #0
+	str r1, [r0]
 	StoreRegs
 	
 	ldmia sp!, {lr}
@@ -597,7 +608,8 @@ CPU_TriggerIRQ:
 	bic snesP, snesP, #(flagD|flagW)
 	orr snesP, snesP, #flagI
 	bic snesPBR, snesPBR, #0xFF
-	ldr r0, =(ROM_Bank0 + 0x8000)
+	ldr r0, =ROM_Bank0End
+	ldr r0, [r0]
 	subeq r0, r0, #vec_e0_IRQ
 	subne r0, r0, #vec_e1_IRQ
 	ldrh r0, [r0]
@@ -625,7 +637,8 @@ CPU_TriggerNMI:
 	bic snesP, snesP, #(flagD|flagW)
 	orr snesP, snesP, #flagI
 	bic snesPBR, snesPBR, #0xFF
-	ldr r0, =(ROM_Bank0 + 0x8000)
+	ldr r0, =ROM_Bank0End
+	ldr r0, [r0]
 	subeq r0, r0, #vec_e0_NMI
 	subne r0, r0, #vec_e1_NMI
 	ldrh r0, [r0]
@@ -653,6 +666,9 @@ CPU_GetReg:
 	bx lr
 	
 @ --- Main loop ---------------------------------------------------------------
+
+CPU_Cycles:
+	.long 0
 	
 CPU_Run:
 	LoadRegs
@@ -660,11 +676,19 @@ CPU_Run:
 frameloop:
 		ldr r0, =0x05540000
 		add snesCycles, snesCycles, r0
+		ldr r0, =CPU_Cycles
+		ldr r1, [r0]
+		add r1, r1, r0, lsr #0x10
+		str r1, [r0]
 		b emuloop
 		
 newline:
 			ldr r0, =0x05540001
 			add snesCycles, snesCycles, r0
+			ldr r0, =CPU_Cycles
+			ldr r1, [r0]
+			add r1, r1, r0, lsr #0x10
+			str r1, [r0]
 			tst snesP, #flagW
 			bne emulate_hardware
 			
@@ -673,7 +697,19 @@ emuloop:
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
+				ldr r0, =CPU_Cycles
+				ldr r2, =0x29F0000
+				ldr r1, [r0]
+				sub r3, r1, snesCycles, lsr #0x10
+				mov r3, r3, lsl #0x10
+				cmp r3, r2
+				blt skip_spc700
+				
+				sub r1, r1, r2, lsr #0x10
+				str r1, [r0]
+				bl Sync_RunSPC
 
+skip_spc700:
 				cmp snesCycles, #0x00010000
 				bge emuloop
 				
@@ -686,6 +722,13 @@ emulate_hardware:
 			b newline
 			
 vblank:
+			@ debug
+			@mov r3, #0x05000000
+			@ldr r2, [r3]
+			@add r2, r2, #1
+			@str r2, [r3]
+			@ debug end
+			
 			tsteq snesP, #flagI2
 			beq CPU_TriggerNMI
 			mov r1, #0x83

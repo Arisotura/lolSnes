@@ -37,13 +37,16 @@ typedef struct
 
 extern SPC_Regs_t SPC_Regs;
 
-extern u8 SPC_Memory[0x10000];
+extern u8 SPC_Memory[0x10040];
 
 extern u8* SPC_IOPorts;
+extern struct SPC_TimersStruct SPC_Timers;
 
 	
 void SPC_Reset();
 void SPC_Run();
+
+void SPC_InitMisc();
 
 u8 SPC_IORead8(u16 addr);
 u16 SPC_IORead16(u16 addr);

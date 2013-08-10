@@ -199,21 +199,24 @@ void _ROM_DoCacheBank(int bank, int type)
 	{
 		bank &= 0x7F;
 
-		fseek(ROM_File, base + (bank << 15), SEEK_SET);
-		fread(ptr, 0x8000, 1, ROM_File);
-
-		if (bank >= 0x40)
+		if (bank < 0x7E)
 		{
-			MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-			MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-			MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-			MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
-		}
+			fseek(ROM_File, base + (bank << 15), SEEK_SET);
+			fread(ptr, 0x8000, 1, ROM_File);
 
-		MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-		MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-		MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-		MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
+			if (bank >= 0x40)
+			{
+				MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
+				MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
+				MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
+				MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
+			}
+
+			MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
+			MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
+			MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
+			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
+		}
 	}
 
 	//idx++;
@@ -368,7 +371,7 @@ void Mem_Reset()
 	ROM_Bank0End = ROM_Bank0 + 0x8000;
 	
 	iprintf("mm %08X\n", (void*)Mem_ROMRead16);
-	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
+	iprintf("sysram = %08X | %08X\n", &Mem_SysRAM[0], MEM_PTR(0x7F, 0x8000));
 	
 	// get uncached address
 	SPC_IOPorts = (u8*)((u32)(&_SPC_IOPorts[0]) | 0x00400000);

@@ -2,6 +2,8 @@
 .arm
 
 @ --- TODO --------------------------------------------------------------------
+@ HIGH PRIORITY: FIX WAIT MODE
+@
 @ (low priority-- aka who cares)
 @ * for some addressing modes using X/Y, add 1 cycle if adding X/Y crosses page boundary
 @ * accessing I/O registers from 0x4000 to 0x4200 should take 12 cycles
@@ -676,36 +678,32 @@ CPU_Run:
 frameloop:
 		ldr r0, =0x05540000
 		add snesCycles, snesCycles, r0
-		ldr r0, =CPU_Cycles
-		ldr r1, [r0]
-		add r1, r1, r0, lsr #0x10
-		str r1, [r0]
 		b emuloop
 		
 newline:
 			ldr r0, =0x05540001
 			add snesCycles, snesCycles, r0
-			ldr r0, =CPU_Cycles
-			ldr r1, [r0]
-			add r1, r1, r0, lsr #0x10
-			str r1, [r0]
 			tst snesP, #flagW
 			bne emulate_hardware
 			
 emuloop:
+				stmdb sp!, {snesCycles}
+				
 				OpcodePrefetch8
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
-				ldr r0, =CPU_Cycles
-				ldr r2, =0x29F0000
-				ldr r1, [r0]
-				sub r3, r1, snesCycles, lsr #0x10
-				mov r3, r3, lsl #0x10
-				cmp r3, r2
-				blt skip_spc700
+				ldmia sp!, {r3}
 				
-				sub r1, r1, r2, lsr #0x10
+				ldr r0, =CPU_Cycles
+				ldr r1, [r0]
+				sub r3, r3, snesCycles
+				subs r1, r1, r3, asr #0x10
+				strpl r1, [r0]
+				bpl skip_spc700
+				
+				ldr r3, =0x29F
+				add r1, r1, r3
 				str r1, [r0]
 				bl Sync_RunSPC
 
@@ -717,8 +715,6 @@ emulate_hardware:
 			mov r0, snesCycles, lsl #0x10
 			cmp r0, #0xE00000
 			bge vblank
-			@mov r0, r0, lsr #0x10
-			@bl PPU_DrawLine
 			b newline
 			
 vblank:

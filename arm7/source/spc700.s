@@ -203,17 +203,17 @@ OpTableStart:
 	.long OP_BPL, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@1
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_DEC_X, OP_CMP_X_mImm, OP_JMP_a_X
 	.long OP_CLRP, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@2
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_PUSH_A, OP_UNK, OP_BRA
+	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_PUSH_A, OP_CBNE_DP, OP_BRA
 	.long OP_BMI, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_CMP_X_DP, OP_UNK	@3
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_INC_X, OP_UNK, OP_CALL
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@4
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_PUSH_X, OP_UNK, OP_UNK
 	.long OP_BVC, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@5
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_X_A, OP_CMP_Y_mImm, OP_JMP_a
-	.long OP_CLRC, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@6
-	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_PUSH_Y, OP_UNK, OP_RET
-	.long OP_BVS, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@7
-	.long OP_CMP_DP_Imm, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_A_X, OP_CMP_Y_DP, OP_UNK
+	.long OP_CLRC, OP_UNK, OP_UNK, OP_UNK, OP_CMP_A_DP, OP_CMP_A_mImm, OP_UNK, OP_CMP_A_m_X	@6
+	.long OP_CMP_A_Imm, OP_CMP_DP_DP, OP_UNK, OP_UNK, OP_UNK, OP_PUSH_Y, OP_UNK, OP_RET
+	.long OP_BVS, OP_UNK, OP_UNK, OP_UNK, OP_CMP_A_DP_X, OP_CMP_A_mImm_X, OP_CMP_A_mImm_Y, OP_CMP_A_m_Y	@7
+	.long OP_CMP_DP_Imm, OP_CMP_mX_mY, OP_UNK, OP_UNK, OP_UNK, OP_MOV_A_X, OP_CMP_Y_DP, OP_UNK
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_ADC_A_DP, OP_UNK, OP_UNK, OP_UNK	@8
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_Y_Imm, OP_POP_P, OP_MOV_DP_Imm
 	.long OP_BCC, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_UNK	@9
@@ -225,7 +225,7 @@ OpTableStart:
 	.long OP_UNK, OP_UNK, OP_UNK, OP_UNK, OP_MOV_DP_A, OP_MOV_Imm_A, OP_MOV_mX_A, OP_MOV_m_X_A	@C
 	.long OP_CMP_X_Imm, OP_MOV_Imm_X, OP_UNK, OP_MOV_DP_Y, OP_MOV_Imm_Y, OP_MOV_X_Imm, OP_POP_X, OP_MUL_YA
 	.long OP_BNE, OP_UNK, OP_UNK, OP_UNK, OP_MOV_DP_X_A, OP_MOV_lmX_A, OP_MOV_lmY_A, OP_MOV_m_Y_A	@D
-	.long OP_MOV_DP_X, OP_MOV_DP_Y_X, OP_MOVW_DP_YA, OP_MOV_DP_X_Y, OP_DEC_Y, OP_MOV_A_Y, OP_UNK, OP_UNK
+	.long OP_MOV_DP_X, OP_MOV_DP_Y_X, OP_MOVW_DP_YA, OP_MOV_DP_X_Y, OP_DEC_Y, OP_MOV_A_Y, OP_CBNE_DP_X, OP_UNK
 	.long OP_CLRV, OP_UNK, OP_UNK, OP_UNK, OP_MOV_A_DP, OP_MOV_A_lm, OP_MOV_A_mX, OP_MOV_A_m_X	@E
 	.long OP_MOV_A_Imm, OP_MOV_X_lm, OP_UNK, OP_MOV_Y_DP, OP_MOV_Y_lm, OP_UNK, OP_POP_Y, OP_UNK
 	.long OP_BEQ, OP_UNK, OP_UNK, OP_UNK, OP_MOV_A_DP_X, OP_MOV_A_lmX, OP_MOV_A_lmY, OP_MOV_A_m_Y	@F
@@ -311,6 +311,13 @@ op_return:
 			@cmp r0, #0x0500
 		@lolz:
 		@	blt lolz
+		@	ldr r12, =0x5AF
+		@	cmp r12, spcPC, lsr #0x10
+		@	bne skipcrapo
+		@	cmp spcX, #1
+		@	crapo:
+		@	beq crapo
+		@	skipcrapo:
 		
 			@ timers emulation
 		
@@ -451,6 +458,22 @@ noTimer2:
 	orrne r0, spcX, #0x100
 .endm
 
+.macro GetOp_mX
+	GetAddr_mX
+	MemRead8
+.endm
+
+.macro GetAddr_mY
+	tst spcPSW, #flagP
+	moveq r0, spcY
+	orrne r0, spcY, #0x100
+.endm
+
+.macro GetOp_mY
+	GetAddr_mY
+	MemRead8
+.endm
+
 .macro GetAddr_m_X
 	Prefetch8
 	add r0, r0, spcX
@@ -576,6 +599,30 @@ OP_CALL:
 	AddCycles 8
 	b op_return
 	
+@ --- CBNE --------------------------------------------------------------------
+
+.macro DO_CBNE cb, cnb
+	cmp spcA, r0
+	bne 1f
+		add spcPC, spcPC, #0x10000
+		AddCycles \cnb
+		b op_return
+1:
+	GetOp_Imm
+	mov r0, r0, lsl #0x18
+	add spcPC, spcPC, r0, asr #0x8
+	AddCycles \cb
+	b op_return
+.endm
+
+OP_CBNE_DP:
+	GetOp_DP
+	DO_CBNE 7, 5
+	
+OP_CBNE_DP_X:
+	GetOp_DP_X
+	DO_CBNE 8, 6
+	
 @ --- CLRx --------------------------------------------------------------------
 
 OP_CLRC:
@@ -603,10 +650,79 @@ OP_CLRV:
 	orrlt spcPSW, spcPSW, #flagN
 .endm
 
+OP_CMP_A_Imm:
+	GetOp_Imm
+	DO_CMP spcA, r0
+	AddCycles 2
+	b op_return
+	
+OP_CMP_A_DP:
+	GetOp_DP
+	DO_CMP spcA, r0
+	AddCycles 3
+	b op_return
+	
+OP_CMP_A_DP_X:
+	GetOp_DP_X
+	DO_CMP spcA, r0
+	AddCycles 4
+	b op_return
+	
+OP_CMP_A_m_X:
+	GetOp_m_X
+	DO_CMP spcA, r0
+	AddCycles 6
+	b op_return
+	
+OP_CMP_A_m_Y:
+	GetOp_m_Y
+	DO_CMP spcA, r0
+	AddCycles 6
+	b op_return
+	
+OP_CMP_A_mImm:
+	GetAddr_Imm
+	MemRead8
+	DO_CMP spcA, r0
+	AddCycles 4
+	b op_return
+	
+OP_CMP_A_mImm_X:
+	GetAddr_Imm
+	add r0, r0, spcX
+	MemRead8
+	DO_CMP spcA, r0
+	AddCycles 5
+	b op_return
+	
+OP_CMP_A_mImm_Y:
+	GetAddr_Imm
+	add r0, r0, spcY
+	MemRead8
+	DO_CMP spcA, r0
+	AddCycles 5
+	b op_return
+	
+OP_CMP_DP_DP:
+	GetOp_DP
+	mov r1, r0
+	GetOp_DP
+	DO_CMP r0, r1
+	AddCycles 6
+	b op_return
+
 OP_CMP_DP_Imm:
 	GetOp_Imm r1
 	GetOp_DP
 	DO_CMP r0, r1
+	AddCycles 5
+	b op_return
+	
+OP_CMP_mX_mY:
+	GetOp_mX
+	mov r1, r0
+	GetOp_mY
+	DO_CMP r1, r0
 	AddCycles 5
 	b op_return
 	
@@ -755,7 +871,7 @@ OP_MOV_A_Imm:
 	
 OP_MOV_A_lm:
 	GetAddr_Imm
-	MemRead16
+	MemRead8
 	DO_MOV spcA, r0
 	AddCycles 4
 	b op_return
@@ -763,7 +879,8 @@ OP_MOV_A_lm:
 OP_MOV_A_lmX:
 	GetAddr_Imm
 	add r0, r0, spcX
-	MemRead16
+	mov r12, r0
+	MemRead8
 	DO_MOV spcA, r0
 	AddCycles 5
 	b op_return
@@ -771,7 +888,7 @@ OP_MOV_A_lmX:
 OP_MOV_A_lmY:
 	GetAddr_Imm
 	add r0, r0, spcY
-	MemRead16
+	MemRead8
 	DO_MOV spcA, r0
 	AddCycles 5
 	b op_return

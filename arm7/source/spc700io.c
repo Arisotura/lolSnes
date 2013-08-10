@@ -122,3 +122,22 @@ void SPC_IOWrite16(u16 addr, u16 val)
 			break;
 	}
 }
+
+
+// debug
+#include <stdio.h>
+/*__attribute__((section(".ewram"), long_call)) void loldump()
+{
+	FILE* f = fopen("spcram.bin", "wb");
+	int i;
+	u32 val;
+	
+	for (i = 0; i < 0x10000; i += 4)
+	{
+		val = *(u32*)&SPC_Memory[i];
+		fwrite(&val, 4, 1, f);
+	}
+	
+	fflush(f);
+	fclose(f);
+}*/

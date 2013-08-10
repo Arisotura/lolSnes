@@ -541,7 +541,7 @@ int lolz=0;
 void PPU_Write8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r12}");
-	
+	if (addr < 0x40) iprintf("PPU write 21%02X %02X\n", addr, val);
 	switch (addr)
 	{
 		case 0x05:
@@ -636,7 +636,7 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x40: SPC_IOPorts[0] = val; break;
-		case 0x41: SPC_IOPorts[1] = val; break;
+		case 0x41: iprintf("2141=%02X\n", val);SPC_IOPorts[1] = val; break;
 		case 0x42: if (val==0) iprintf("SPC block transfer done\n");SPC_IOPorts[2] = val; break;
 		case 0x43: SPC_IOPorts[3] = val; break;
 		
@@ -647,7 +647,7 @@ void PPU_Write8(u32 addr, u8 val)
 	
 	asm("ldmia sp!, {r12}");
 }
-
+extern u8 Mem_SysRAM[0x20000];
 void PPU_Write16(u32 addr, u16 val)
 {
 	asm("stmdb sp!, {r12}");
@@ -661,7 +661,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&SPC_IOPorts[0] = val; break;
-		case 0x42: iprintf("write 2142 %04X %04X %04X\n", val, *(u16*)&ROM_Cache[0xE][2], *(u16*)&ROM_Cache[0xF][2]); *(u16*)&SPC_IOPorts[2] = val; break;
+		case 0x42: iprintf("write 2142 %04X %02X%04X\n", val, Mem_SysRAM[2], *(u16*)&Mem_SysRAM[0]); *(u16*)&SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

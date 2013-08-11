@@ -3131,7 +3131,7 @@ OP_m1_PLA:
 	bic snesP, snesP, #flagNZ
 	tst snesA, #0xFF
 	orreq snesP, snesP, #flagZ
-	tst snesA, #0x8000
+	tst snesA, #0x80
 	orrne snesP, snesP, #flagN
 	AddCycles 2
 	b op_return

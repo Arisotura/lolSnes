@@ -26,6 +26,7 @@ u8 PPU_CGRFlag = 0;
 u8 PPU_VRAM[0x10000];
 u16 PPU_VRAMAddr = 0;
 u16 PPU_VRAMVal = 0;
+u8 PPU_VRAMInc = 0;
 
 // VRAM mapping table
 // each entry applies to 1K of SNES VRAM
@@ -240,7 +241,7 @@ void PPU_UploadBGChr(int nbg)
 	{
 		u8* bp12 = &PPU_VRAM[chrbase];
 		u8* bp34 = bp12 + 16;
-		u16* dst = (u16*)(BG_CHR_BASE + (nbg << 15));
+		u16* dst = (u16*)(BG_CHR_BASE + (nbg << 16));
 		
 		int t;
 		for (t = 0; t < 1024; t++)
@@ -357,7 +358,7 @@ void PPU_ModeChange(u8 newmode)
 			break;
 		
 		default:
-			iprintf("unsupported PPU mode %d\n", newmode);
+			//iprintf("unsupported PPU mode %d\n", newmode);
 			break;
 	}
 }
@@ -436,8 +437,11 @@ inline void PPU_SetBGCHR(int nbg, u8 val)
 		int i, size = bg->ChrSize >> 10;
 		for (i = 0; i < size; i++)
 		{
-			PPU_VRAMMap[(oldchrbase >> 10) + i].ChrUsage &= nbmask;
-			PPU_VRAMMap[(bg->ChrBase >> 10) + i].ChrUsage |= bmask;
+			register int oldi = (oldchrbase >> 10) + i;
+			register int newi = (bg->ChrBase >> 10) + i;
+			
+			if (oldi < 64) PPU_VRAMMap[oldi].ChrUsage &= nbmask;
+			if (newi < 64) PPU_VRAMMap[newi].ChrUsage |= bmask;
 		}
 		
 		PPU_UploadBGChr(nbg);
@@ -447,6 +451,8 @@ inline void PPU_SetBGCHR(int nbg, u8 val)
 inline void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 {
 	// TODO
+	
+	//*(u16*)(BG_CHR_BASE + (nbg << 16) + addr - PPU_BG[nbg].ChrBase) = 0;
 }
 
 inline void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 stile)
@@ -537,11 +543,11 @@ u16 PPU_Read16(u32 addr)
 	asm("ldmia sp!, {r12}");
 	return ret;
 }
-int lolz=0;
+
 void PPU_Write8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r12}");
-	if (addr < 0x40) iprintf("PPU write 21%02X %02X\n", addr, val);
+	
 	switch (addr)
 	{
 		case 0x05:
@@ -578,8 +584,9 @@ void PPU_Write8(u32 addr, u8 val)
 			
 		
 		case 0x15:
-			if (val != 0x80) iprintf("UNSUPPORTED VRAM MODE %02X\n", val);
-			printf("vram = %08X\n", (u32)&PPU_VRAM);
+			if ((val & 0x7F) != 0x00) iprintf("UNSUPPORTED VRAM MODE %02X\n", val);
+			//printf("vram = %08X\n", (u32)&PPU_VRAM);
+			PPU_VRAMInc = val;
 			break;
 			
 		case 0x16:
@@ -592,17 +599,22 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 		
 		case 0x18: // VRAM shit
-			PPU_VRAMVal &= 0xFF00;
-			PPU_VRAMVal |= val;
+			PPU_VRAM[PPU_VRAMAddr << 1] = val;
+			PPU_UpdateVRAM(PPU_VRAMAddr << 1, *(u16*)&PPU_VRAM[PPU_VRAMAddr << 1]);
+			if (!(PPU_VRAMInc & 0x80))
+			{
+				PPU_VRAMAddr++;
+				// TODO: support other increment modes
+			}
 			break;
 		case 0x19:
-			PPU_VRAMVal &= 0x00FF;
-			PPU_VRAMVal |= (u16)val << 8;
-			*(u16*)&PPU_VRAM[PPU_VRAMAddr << 1] = PPU_VRAMVal;
-			PPU_UpdateVRAM(PPU_VRAMAddr << 1, PPU_VRAMVal);
-			PPU_VRAMVal = 0;
-			PPU_VRAMAddr++;
-			// TODO: support other increment modes
+			PPU_VRAM[(PPU_VRAMAddr << 1) + 1] = val;
+			PPU_UpdateVRAM(PPU_VRAMAddr << 1, *(u16*)&PPU_VRAM[PPU_VRAMAddr << 1]);
+			if (PPU_VRAMInc & 0x80)
+			{
+				PPU_VRAMAddr++;
+				// TODO: support other increment modes
+			}
 			break;
 			
 		case 0x21:
@@ -636,7 +648,7 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x40: SPC_IOPorts[0] = val; break;
-		case 0x41: iprintf("2141=%02X\n", val);SPC_IOPorts[1] = val; break;
+		case 0x41: SPC_IOPorts[1] = val; break;
 		case 0x42: if (val==0) iprintf("SPC block transfer done\n");SPC_IOPorts[2] = val; break;
 		case 0x43: SPC_IOPorts[3] = val; break;
 		
@@ -661,7 +673,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&SPC_IOPorts[0] = val; break;
-		case 0x42: iprintf("write 2142 %04X %02X%04X\n", val, Mem_SysRAM[2], *(u16*)&Mem_SysRAM[0]); *(u16*)&SPC_IOPorts[2] = val; break;
+		case 0x42: *(u16*)&SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

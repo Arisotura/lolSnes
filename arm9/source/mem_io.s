@@ -25,6 +25,9 @@ Mem_IORead8:
 	cmp r1, #0x4200
 	beq Mem_GIORead8
 	
+	cmp r1, #0x4300
+	beq DMA_Read8
+	
 	mov r0, #0
 	bx lr
 	
@@ -38,6 +41,9 @@ Mem_IORead16:
 	cmp r1, #0x4200
 	beq Mem_GIORead16
 	
+	cmp r1, #0x4300
+	beq DMA_Read16
+	
 	mov r0, #0
 	bx lr
 	
@@ -48,6 +54,9 @@ Mem_IOWrite8:
 	cmp r2, #0x2100
 	beq PPU_Write8
 	
+	cmp r2, #0x4300
+	beq DMA_Write8
+	
 	cmp r2, #0x4200
 	bxne lr
 	cmp r0, #0x00
@@ -55,9 +64,7 @@ Mem_IOWrite8:
 	tst r1, #0x80
 	bicne snesP, snesP, #flagI2
 	orreq snesP, snesP, #flagI2
-	bx lr
-	
-	bx lr
+	b Mem_GIOWrite8
 	
 Mem_IOWrite16:
 	and r2, r0, #0xFF00
@@ -66,7 +73,14 @@ Mem_IOWrite16:
 	cmp r2, #0x2100
 	beq PPU_Write16
 	
-	cmp r2, #0x4200
-	beq Mem_GIOWrite16
+	cmp r2, #0x4300
+	beq DMA_Write16
 	
-	bx lr
+	cmp r2, #0x4200
+	bxne lr
+	cmp r0, #0x00
+	bne Mem_GIOWrite16
+	tst r1, #0x80
+	bicne snesP, snesP, #flagI2
+	orreq snesP, snesP, #flagI2
+	b Mem_GIOWrite16

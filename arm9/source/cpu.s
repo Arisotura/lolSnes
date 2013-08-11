@@ -122,7 +122,7 @@ CPU_Regs:
 	subeq snesCycles, snesCycles, #0x60000
 	subne snesCycles, snesCycles, #0x80000
 	tst r3, #0x40000000
-	bne 1f
+	bne 2f
 	tst r3, #0x20000000
 	beq 1f
 		bl Mem_IOWrite8
@@ -141,7 +141,7 @@ CPU_Regs:
 	subeq snesCycles, snesCycles, #0xC0000
 	subne snesCycles, snesCycles, #0x100000
 	tst r3, #0x40000000
-	bne 1f
+	bne 2f
 	tst r3, #0x20000000
 	beq 1f
 		bl Mem_IOWrite16
@@ -683,8 +683,8 @@ frameloop:
 newline:
 			ldr r0, =0x05540001
 			add snesCycles, snesCycles, r0
-			tst snesP, #flagW
-			bne emulate_hardware
+			@tst snesP, #flagW
+			@bne emulate_hardware
 			
 emuloop:
 				stmdb sp!, {snesCycles}
@@ -708,13 +708,33 @@ op_return:
 				bl Sync_RunSPC
 
 skip_spc700:
+				@ <= 1360 (550): HBlank end
+				@ <= 268 (10C): HBlank start
+				ldr r0, =Mem_HVBJOY
+				ldrb r1, [r0]
+				cmp snesCycles, #0x10C0000
+				ble Hblank
+				cmp snesCycles, #0x5500000
+				bicle r1, r1, #0x40
+				ble HblankEnd
+Hblank:
+				orr r1, r1, #0x40
+HblankEnd:
+				strb r1, [r0]
+				
 				cmp snesCycles, #0x00010000
 				bge emuloop
 				
 emulate_hardware:
+			ldr r1, =Mem_HVBJOY
+			ldrb r2, [r1]
 			mov r0, snesCycles, lsl #0x10
 			cmp r0, #0xE00000
+			orrge r2, r2, #0x80
+			strgeb r2, [r1]
 			bge vblank
+			bic r2, r2, #0x80
+			strb r2, [r1]
 			b newline
 			
 vblank:

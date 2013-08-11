@@ -17,6 +17,8 @@ extern u32 Mem_PtrTable[0x800] DTCM_BSS;
 
 extern u8* SPC_IOPorts;
 
+extern u8 Mem_HVBJOY;
+
 
 void ROM_DoCacheBank(int bank, int type);
 
@@ -38,5 +40,16 @@ u8 Mem_GIORead8(u32 addr);
 u16 Mem_GIORead16(u32 addr);
 void Mem_GIOWrite8(u32 addr, u8 val);
 void Mem_GIOWrite16(u32 addr, u16 val);
+
+u8 DMA_Read8(u32 addr);
+u16 DMA_Read16(u32 addr);
+void DMA_Write8(u32 addr, u8 val);
+void DMA_Write16(u32 addr, u16 val);
+void DMA_Enable(u8 flag);
+
+u8 Mem_Read8(u32 addr);
+u16 Mem_Read16(u32 addr);
+void Mem_Write8(u32 addr, u8 val);
+void Mem_Write16(u32 addr, u8 val);
 
 #endif

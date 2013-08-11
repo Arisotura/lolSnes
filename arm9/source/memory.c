@@ -58,6 +58,8 @@ u32 Mem_PtrTable[0x800] DTCM_BSS;
 u8 _SPC_IOPorts[8] = {0,0,0,0, 0,0,0,0};
 u8* SPC_IOPorts;
 
+u8 Mem_HVBJOY = 0x00;
+
 
 bool ROM_CheckHeader(u32 offset)
 {
@@ -379,6 +381,8 @@ void Mem_Reset()
 	fifoSendValue32(FIFO_USER_01, 3);
 	fifoSendAddress(FIFO_USER_01, SPC_IOPorts);
 	
+	Mem_HVBJOY = 0x00;
+	
 	PPU_Reset();
 }
 
@@ -453,6 +457,14 @@ u8 Mem_GIORead8(u32 addr)
 	u8 ret = 0;
 	switch (addr)
 	{
+		case 0x10:
+			iprintf("!! READ 4210 -- ACK NMI\n");
+			break;
+			
+		case 0x12:
+			ret = Mem_HVBJOY;
+			break;
+			
 		case 0x18:
 			ret = 0;	// todo
 			break;
@@ -495,7 +507,12 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r12}");
 	
-	iprintf("write8 @ $42%02X : %02x\n", addr, val);
+	switch (addr)
+	{
+		case 0x0B:
+			DMA_Enable(val);
+			break;
+	}
 	
 	asm("ldmia sp!, {r12}");
 }
@@ -509,3 +526,72 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 	asm("ldmia sp!, {r12}");
 }
 
+
+u8 Mem_Read8(u32 addr)
+{
+	u32 ptr = Mem_PtrTable[addr >> 13];
+	if (ptr & MPTR_SPECIAL)
+	{
+		if (ptr & MPTR_READONLY)
+		{
+			ptr += (addr & 0x1FFF);
+			return Mem_ROMRead8(ptr);
+		}
+		else
+			return Mem_IORead8(addr);
+	}
+	else
+	{
+		u8* mptr = (u8*)(ptr & 0x0FFFFFFF);
+		return mptr[addr & 0x1FFF];
+	}
+}
+
+u16 Mem_Read16(u32 addr)
+{
+	u32 ptr = Mem_PtrTable[addr >> 13];
+	if (ptr & MPTR_SPECIAL)
+	{
+		if (ptr & MPTR_READONLY)
+		{
+			ptr += (addr & 0x1FFF);
+			return Mem_ROMRead16(ptr);
+		}
+		else
+			return Mem_IORead16(addr);
+	}
+	else
+	{
+		u8* mptr = (u8*)(ptr & 0x0FFFFFFF);
+		addr &= 0x1FFF;
+		return mptr[addr] | (mptr[addr + 1] << 8);
+	}
+}
+
+void Mem_Write8(u32 addr, u8 val)
+{
+	u32 ptr = Mem_PtrTable[addr >> 13];
+	if (ptr & MPTR_READONLY) return;
+	if (ptr & MPTR_SPECIAL)
+		Mem_IOWrite8(addr, val);
+	else
+	{
+		u8* mptr = (u8*)(ptr & 0x0FFFFFFF);
+		mptr[addr & 0x1FFF] = val;
+	}
+}
+
+void Mem_Write16(u32 addr, u8 val)
+{
+	u32 ptr = Mem_PtrTable[addr >> 13];
+	if (ptr & MPTR_READONLY) return;
+	if (ptr & MPTR_SPECIAL)
+		Mem_IOWrite16(addr, val);
+	else
+	{
+		u8* mptr = (u8*)(ptr & 0x0FFFFFFF);
+		addr &= 0x1FFF;
+		mptr[addr] = val & 0xFF;
+		mptr[addr + 1] = val >> 8;
+	}
+}

@@ -39,10 +39,6 @@ int main(void)
 	
 	iprintf("ROM loaded, running\n");
 
-	//CPU_Run();
-	//iprintf("%08X\n", (u32)&CPU_Regs);
-	//iprintf("%08X %08X %08X %04X%04X\n", CPU_Regs.nCycles, CPU_Regs.PC, CPU_Regs.P.val, CPU_Regs.DBR, CPU_Regs.D);
-	//iprintf("%04X%04X %08X %08X %08X\n", CPU_Regs.PBR, CPU_Regs.S, CPU_Regs.Y, CPU_Regs.X, CPU_Regs.A);
 	CPU_Reset();
 	fifoSendValue32(FIFO_USER_01, 1);
 	
@@ -51,11 +47,13 @@ int main(void)
 
 	swiWaitForVBlank();
 	CPU_Run();
-	/*for (;;)
-	{
-		CPU_Run();
-		swiWaitForVBlank();
-	}*/
 
 	return 0;
+}
+
+void printvar()
+{
+	asm("stmdb sp!, {r12}");
+	iprintf("printvar %02X%02X\n", SPC_IOPorts[9], SPC_IOPorts[8]);
+	asm("ldmia sp!, {r12}");
 }

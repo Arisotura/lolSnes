@@ -32,27 +32,6 @@
 #include "spc700.h"
 
 
-void (*oldIRQHandler)();
-
-void myIRQHandler()
-{
-	// handle IPC sync IRQ separately
-	u32 IE = *(u32*)0x04000210;
-	u32 IF = *(u32*)0x04000214;
-	u32 irq = IE & IF;
-	
-	if (irq & 0x00010000)
-	{
-		*(u32*)0x04000214 = 0x00010000;
-		*(u32*)0x0380FFF8 |= 0x00010000;
-		irq &= 0xFFFEFFFF;
-	}
-	
-	// pass down other IRQs to the libnds handler
-	if (irq)
-		oldIRQHandler();
-}
-
 int main() 
 {
 	readUserSettings();
@@ -61,10 +40,10 @@ int main()
 	fifoInit();
 
 	installSystemFIFO();
-	*(u16*)0x04000180 = 0x4000;
 	
-	//oldIRQHandler = (void(*)())(*(u32*)0x0380FFFC);
-	//*(u32*)0x0380FFFC = (u32)(void*)myIRQHandler;
+	*(u32*)0x04000210 |= 0x00000008;
+	*(u16*)0x04000100 = 0xFBE9;
+	*(u16*)0x04000102 = 0x00C0;
 
 	for (;;)
 	{

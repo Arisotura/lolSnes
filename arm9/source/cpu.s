@@ -516,13 +516,11 @@ OpTableStart:
 .macro UpdateCPUMode
 	SetOpcodeTable
 	tst snesP, #flagE
+	bicne snesS, snesS, #0xFF000000
+	orrne snesS, snesS, #0x01000000
 	tsteq snesP, #flagX
-	beq 1f
-	and snesX, snesX, #0xFF
-	and snesY, snesY, #0xFF
-	bic snesS, snesS, #0xFF000000
-	orr snesS, snesS, #0x01000000
-1:
+	andne snesX, snesX, #0xFF
+	andne snesY, snesY, #0xFF
 .endm
 
 @ --- Misc. functions ---------------------------------------------------------
@@ -559,7 +557,7 @@ OpTableStart:
 
 
 CPU_Reset:
-	stmdb sp!, {lr}
+	stmdb sp!, {r3-r12, lr}
 	bl Mem_Reset
 	
 	mov snesA, #0
@@ -584,7 +582,7 @@ CPU_Reset:
 	str r1, [r0]
 	StoreRegs
 	
-	ldmia sp!, {lr}
+	ldmia sp!, {r3-r12, lr}
 	bx lr
 	
 CPU_TriggerIRQ:
@@ -687,37 +685,51 @@ newline:
 			@bne emulate_hardware
 			
 emuloop:
-				stmdb sp!, {snesCycles}
+				@stmdb sp!, {snesCycles}
 				
 				OpcodePrefetch8
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
-				ldmia sp!, {r3}
+				@ldmia sp!, {r3}
 				
-				ldr r0, =CPU_Cycles
-				ldr r1, [r0]
-				sub r3, r3, snesCycles
-				subs r1, r1, r3, asr #0x10
-				strpl r1, [r0]
-				bpl skip_spc700
+				@ldr r0, =CPU_Cycles
+				@ldr r1, [r0]
+				@sub r3, r3, snesCycles
+				@subs r1, r1, r3, asr #0x10
+				@strpl r1, [r0]
+				@bpl skip_spc700
 				
-				ldr r3, =0x29F
-				add r1, r1, r3
-				str r1, [r0]
-				bl Sync_RunSPC
+				@ldr r3, =0x29F
+				@add r1, r1, r3
+				@str r1, [r0]
+				@bl Sync_RunSPC
+				@ldr r3, =0x04000180
+				@mov r0, #0x6100
+				@strh r0, [r3]
+				
+				@mov r0, #1
+				@mov r1, #0x00010000
+				@swi #0x40000
+				
+				@ leaving this in keeps SPC transfers from breaking
+				@ wtf?
+				@ a fix would be welcome.
+				ldr r0, =0x04000130
 
 skip_spc700:
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start
-				ldr r0, =Mem_HVBJOY
-				ldrb r1, [r0]
 				cmp snesCycles, #0x10C0000
 				ble Hblank
 				cmp snesCycles, #0x5500000
+				ldrle r0, =Mem_HVBJOY
+				ldrleb r1, [r0]
 				bicle r1, r1, #0x40
 				ble HblankEnd
 Hblank:
+				ldr r0, =Mem_HVBJOY
+				ldrb r1, [r0]
 				orr r1, r1, #0x40
 HblankEnd:
 				strb r1, [r0]
@@ -738,13 +750,6 @@ emulate_hardware:
 			b newline
 			
 vblank:
-			@ debug
-			@mov r3, #0x05000000
-			@ldr r2, [r3]
-			@add r2, r2, #1
-			@str r2, [r3]
-			@ debug end
-			
 			tsteq snesP, #flagI2
 			beq CPU_TriggerNMI
 			mov r1, #0x83
@@ -2413,6 +2418,7 @@ OP_JSR_AbsIndIndirect:
 	bic snesA, snesA, #0xFF
 	orr snesA, snesA, r0
 	tst snesA, #0xFF
+	bic snesP, snesP, #flagNZ
 	orreq snesP, snesP, #flagZ
 	tst snesA, #0x80
 	orrne snesP, snesP, #flagN

@@ -54,8 +54,7 @@ u32 Mem_PtrTable[0x800] DTCM_BSS;
 // memory timings (6 or 8 master cycles)
 //u8 Mem_TimingTable[0x800] DTCM_BSS;
 
-
-u8 _SPC_IOPorts[8] = {0,0,0,0, 0,0,0,0};
+u8 _SPC_IOPorts[10] = {0,0,0,0, 0,0,0,0, 2,2};
 u8* SPC_IOPorts;
 
 u8 Mem_HVBJOY = 0x00;
@@ -229,9 +228,9 @@ void _ROM_DoCacheBank(int bank, int type)
 
 void ROM_DoCacheBank(int bank, int type)
 {
-	asm("ldmia sp!, {r12}");
-	_ROM_DoCacheBank(bank, type);
 	asm("stmdb sp!, {r12}");
+	_ROM_DoCacheBank(bank, type);
+	asm("ldmia sp!, {r12}");
 }
 
 
@@ -375,7 +374,7 @@ void Mem_Reset()
 	iprintf("mm %08X\n", (void*)Mem_ROMRead16);
 	iprintf("sysram = %08X | %08X\n", &Mem_SysRAM[0], MEM_PTR(0x7F, 0x8000));
 	
-	// get uncached address
+		// get uncached address
 	SPC_IOPorts = (u8*)((u32)(&_SPC_IOPorts[0]) | 0x00400000);
 	iprintf("SPC IO = %08X\n", SPC_IOPorts);
 	fifoSendValue32(FIFO_USER_01, 3);
@@ -394,43 +393,49 @@ u32 ROM_ReadBuffer;
 // seeking every time
 ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 {
-	if (fileaddr >= ROM_FileSize)
-		return 0;
-	
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r1-r3, r12}");
 
-	fseek(ROM_File, fileaddr, SEEK_SET);
-	fread(&ROM_ReadBuffer, 1, 1, ROM_File);
+	if (fileaddr < ROM_FileSize)
+	{
+		fseek(ROM_File, fileaddr, SEEK_SET);
+		fread(&ROM_ReadBuffer, 1, 1, ROM_File);
+	}
+	else
+		ROM_ReadBuffer = 0;
 
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0xFF;
 }
 
 ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
 {
-	if (fileaddr >= ROM_FileSize)
-		return 0;
-	
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r1-r3, r12}");
 
-	fseek(ROM_File, fileaddr, SEEK_SET);
-	fread(&ROM_ReadBuffer, 2, 1, ROM_File);
+	if (fileaddr < ROM_FileSize)
+	{
+		fseek(ROM_File, fileaddr, SEEK_SET);
+		fread(&ROM_ReadBuffer, 2, 1, ROM_File);
+	}
+	else
+		ROM_ReadBuffer = 0;
 	
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0xFFFF;
 }
 
 ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
 {
-	if (fileaddr >= ROM_FileSize)
-		return 0;
-	
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r1-r3, r12}");
 
-	fseek(ROM_File, fileaddr, SEEK_SET);
-	fread(&ROM_ReadBuffer, 3, 1, ROM_File);
+	if (fileaddr < ROM_FileSize)
+	{
+		fseek(ROM_File, fileaddr, SEEK_SET);
+		fread(&ROM_ReadBuffer, 3, 1, ROM_File);
+	}
+	else
+		ROM_ReadBuffer = 0;
 
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0x00FFFFFF;
 }
 
@@ -458,7 +463,7 @@ u8 Mem_GIORead8(u32 addr)
 	switch (addr)
 	{
 		case 0x10:
-			iprintf("!! READ 4210 -- ACK NMI\n");
+			//iprintf("!! READ 4210 -- ACK NMI\n");
 			break;
 			
 		case 0x12:

@@ -10,10 +10,8 @@ extern u8* ROM_Bank0End;
 
 extern bool Mem_HiROM;
 extern u32 Mem_PtrTable[0x800] DTCM_BSS;
-//extern u8 Mem_TimingTable[0x800] DTCM_BSS;
 
-//extern void (*ROM_CacheCode)(u32 bank);
-//extern void (*ROM_CacheData)(u32 bank);
+extern u8 Mem_SysRAM[0x20000];
 
 extern u8* SPC_IOPorts;
 

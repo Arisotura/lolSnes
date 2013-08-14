@@ -43,6 +43,8 @@ void SPC_InitMisc()
 
 u8 SPC_IORead8(u16 addr)
 {
+	asm("stmdb sp!, {r1-r3, r12}");
+	
 	u8 ret = 0;
 	switch (addr)
 	{
@@ -56,11 +58,14 @@ u8 SPC_IORead8(u16 addr)
 		case 0xFF: ret = SPC_Timers.Timer[2].Val; SPC_Timers.Timer[2].Val = 0; break;
 	}
 	
+	asm("ldmia sp!, {r1-r3, r12}");
 	return ret;
 }
 
 u16 SPC_IORead16(u16 addr)
 {
+	asm("stmdb sp!, {r1-r3, r12}");
+	
 	u16 ret = 0;
 	switch (addr)
 	{
@@ -73,11 +78,14 @@ u16 SPC_IORead16(u16 addr)
 			break;
 	}
 	
+	asm("ldmia sp!, {r1-r3, r12}");
 	return ret;
 }
 
 void SPC_IOWrite8(u16 addr, u8 val)
 {
+	asm("stmdb sp!, {r1-r3, r12}");
+	
 	switch (addr)
 	{
 		case 0xF1:
@@ -107,10 +115,14 @@ void SPC_IOWrite8(u16 addr, u8 val)
 		case 0xFB: SPC_Timers.Timer[1].Limit = val; break;
 		case 0xFC: SPC_Timers.Timer[2].Limit = val; break;
 	}
+	
+	asm("ldmia sp!, {r1-r3, r12}");
 }
 
 void SPC_IOWrite16(u16 addr, u16 val)
 {
+	asm("stmdb sp!, {r1-r3, r12}");
+	
 	switch (addr)
 	{
 		case 0xF4: *(u16*)&SPC_IOPorts[4] = val; break;
@@ -121,23 +133,6 @@ void SPC_IOWrite16(u16 addr, u16 val)
 			SPC_IOWrite8(addr+1, val >> 8);
 			break;
 	}
+	
+	asm("ldmia sp!, {r1-r3, r12}");
 }
-
-
-// debug
-#include <stdio.h>
-/*__attribute__((section(".ewram"), long_call)) void loldump()
-{
-	FILE* f = fopen("spcram.bin", "wb");
-	int i;
-	u32 val;
-	
-	for (i = 0; i < 0x10000; i += 4)
-	{
-		val = *(u32*)&SPC_Memory[i];
-		fwrite(&val, 4, 1, f);
-	}
-	
-	fflush(f);
-	fclose(f);
-}*/

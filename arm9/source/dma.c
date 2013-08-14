@@ -10,13 +10,7 @@ u8 DMA_Read8(u32 addr)
 {
 	asm("stmdb sp!, {r12}");
 	
-	if (addr > 0x7F)
-	{
-		asm("ldmia sp!, {r12}");
-		return 0;
-	}
-	
-	register u8 ret = DMA_Chans[addr];
+	register u8 ret = (addr > 0x7F) ? 0 : DMA_Chans[addr];
 	
 	asm("ldmia sp!, {r12}");
 	return ret;
@@ -26,13 +20,7 @@ u16 DMA_Read16(u32 addr)
 {
 	asm("stmdb sp!, {r12}");
 	
-	if (addr > 0x7F)
-	{
-		asm("ldmia sp!, {r12}");
-		return 0;
-	}
-	
-	u16 ret = DMA_Chans[addr] | (DMA_Chans[addr+1] << 8);
+	u16 ret = (addr > 0x7F) ? 0 : (DMA_Chans[addr] | (DMA_Chans[addr+1] << 8));
 
 	asm("ldmia sp!, {r12}");
 	return ret;
@@ -41,14 +29,9 @@ u16 DMA_Read16(u32 addr)
 void DMA_Write8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r12}");
-
-	if (addr > 0x7F)
-	{
-		asm("ldmia sp!, {r12}");
-		return;
-	}
 	
-	DMA_Chans[addr] = val;
+	if (addr < 0x80)
+		DMA_Chans[addr] = val;
 	
 	asm("ldmia sp!, {r12}");
 }
@@ -57,14 +40,11 @@ void DMA_Write16(u32 addr, u16 val)
 {
 	asm("stmdb sp!, {r12}");
 	
-	if (addr > 0x7F)
+	if (addr < 0x80)
 	{
-		asm("ldmia sp!, {r12}");
-		return;
+		DMA_Chans[addr] = val & 0xFF;
+		DMA_Chans[addr + 1] = val >> 8;
 	}
-	
-	DMA_Chans[addr] = val & 0xFF;
-	DMA_Chans[addr + 1] = val >> 8;
 	
 	asm("ldmia sp!, {r12}");
 }

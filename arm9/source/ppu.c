@@ -28,6 +28,10 @@ u16 PPU_VRAMAddr = 0;
 u16 PPU_VRAMVal = 0;
 u8 PPU_VRAMInc = 0;
 
+u8 PPU_OAM[0x220];
+u16 PPU_OAMAddr = 0;
+u16 PPU_OAMVal = 0;
+
 // VRAM mapping table
 // each entry applies to 1K of SNES VRAM
 typedef struct
@@ -85,6 +89,30 @@ u8 PPU_OBJSize;
 u16 PPU_OBJBase;
 u16 PPU_OBJGap;
 
+/*
+         Val Small  Large
+         0 = 8x8    16x16    ;Caution:
+         1 = 8x8    32x32    ;In 224-lines mode, OBJs with 64-pixel height
+         2 = 8x8    64x64    ;may wrap from lower to upper screen border.
+         3 = 16x16  32x32    ;In 239-lines mode, the same problem applies
+         4 = 16x16  64x64    ;also for OBJs with 32-pixel height.
+         5 = 32x32  64x64
+         6 = 16x32  32x64 (undocumented)
+         7 = 16x32  32x32 (undocumented)
+*/
+u8 _PPU_OBJSizes[16] = 
+{
+	0, 1,
+	0, 2,
+	0, 3,
+	1, 2,
+	1, 3,
+	2, 3,
+	0x82, 0x83,
+	0x82, 2
+};
+u8* PPU_OBJSizes;
+
 
 void PPU_Reset()
 {
@@ -99,6 +127,9 @@ void PPU_Reset()
 	
 	PPU_VRAMAddr = 0;
 	PPU_VRAMVal = 0;
+	
+	PPU_OAMAddr = 0;
+	PPU_OAMVal = 0;
 	
 	for (i = 0; i < 64; i++)
 	{
@@ -133,6 +164,7 @@ void PPU_Reset()
 	PPU_OBJSize = 0;
 	PPU_OBJBase = 0;
 	PPU_OBJGap = 0;
+	PPU_OBJSizes = _PPU_OBJSizes;
 		
 	
 	// allocate VRAM
@@ -144,7 +176,7 @@ void PPU_Reset()
 	*(u8*)0x04000246 = 0x8C;
 	
 	// setup BGs
-	*(u32*)0x04000000 = 0x40010F10 | (4 << 27);
+	*(u32*)0x04000000 = 0x40010F00 | (4 << 27);
 	*(u16*)0x04000008 = 0x0080 | (0 << 4) | (0 << 10);
 	*(u16*)0x0400000A = 0x0080 | (1 << 4) | (1 << 10);
 	*(u16*)0x0400000C = 0x0080 | (2 << 4) | (2 << 10);
@@ -337,17 +369,20 @@ void PPU_UploadOBJChr()
 				b4 = *bp34++;
 
 			*dst++ 	= ((b1 & 0x80) >> 7) | ((b2 & 0x80) >> 6) | ((b3 & 0x80) >> 5) | ((b4 & 0x80) >> 4)
-					| ((b1 & 0x40) << 2) | ((b2 & 0x40) << 3) | ((b3 & 0x40) << 4) | ((b4 & 0x40) << 5);
-			*dst++ 	= ((b1 & 0x20) >> 5) | ((b2 & 0x20) >> 4) | ((b3 & 0x20) >> 3) | ((b4 & 0x20) >> 2)
-					| ((b1 & 0x10) << 4) | ((b2 & 0x10) << 5) | ((b3 & 0x10) << 6) | ((b4 & 0x10) << 7);
+					| ((b1 & 0x40) >> 2) | ((b2 & 0x40) >> 1) | ((b3 & 0x40)) | ((b4 & 0x40) << 1)
+					| ((b1 & 0x20) << 3) | ((b2 & 0x20) << 4) | ((b3 & 0x20) << 5) | ((b4 & 0x20) << 6)
+					| ((b1 & 0x10) << 8) | ((b2 & 0x10) << 9) | ((b3 & 0x10) << 10) | ((b4 & 0x10) << 11);
 			*dst++ 	= ((b1 & 0x08) >> 3) | ((b2 & 0x08) >> 2) | ((b3 & 0x08) >> 1) | (b4 & 0x08)
-					| ((b1 & 0x04) << 6) | ((b2 & 0x04) << 7) | ((b3 & 0x04) << 8) | ((b4 & 0x04) << 9);
-			*dst++ 	= ((b1 & 0x02) >> 1) | (b2 & 0x02) | ((b3 & 0x02) << 1) | ((b4 & 0x02) << 2)
-					| ((b1 & 0x01) << 8) | ((b2 & 0x01) << 9) | ((b3 & 0x01) << 10) | ((b4 & 0x01) << 11);
+					| ((b1 & 0x04) << 2) | ((b2 & 0x04) << 3) | ((b3 & 0x04) << 4) | ((b4 & 0x04) << 5)
+					| ((b1 & 0x02) << 7) | ((b2 & 0x02) << 8) | ((b3 & 0x02) << 9) | ((b4 & 0x02) << 10)
+					| ((b1 & 0x01) << 12) | ((b2 & 0x01) << 13) | ((b3 & 0x01) << 14) | ((b4 & 0x01) << 15);
 		}
 		
 		bp12 += 16;
 		bp34 += 16;
+		
+		if ((t & 0xF) == 0xF)
+			dst += 256;
 	}
 }
 
@@ -532,10 +567,14 @@ inline void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 		vramptr += (addr & 0xFFFFFFF0) << 2;
 		vramptr += (addr & 0xE) << 2;
 		
-		*(u16*)vramptr = ((val & 0x0040) << 2) | ((val & 0x4000) >> 5) | ((val & 0x0080) >> 7) | ((val & 0x8000) >> 14);
-		*(u16*)(vramptr + 2) = ((val & 0x0010) << 4) | ((val & 0x1000) >> 3) | ((val & 0x0020) >> 5) | ((val & 0x2000) >> 12);
-		*(u16*)(vramptr + 4) = ((val & 0x0004) << 6) | ((val & 0x0400) >> 1) | ((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
-		*(u16*)(vramptr + 6) = ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | ((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
+		*(u16*)vramptr = ((val & 0x0040) << 2) | ((val & 0x4000) >> 5) | 
+								((val & 0x0080) >> 7) | ((val & 0x8000) >> 14);
+		*(u16*)(vramptr + 2) = ((val & 0x0010) << 4) | ((val & 0x1000) >> 3) | 
+								((val & 0x0020) >> 5) | ((val & 0x2000) >> 12);
+		*(u16*)(vramptr + 4) = ((val & 0x0004) << 6) | ((val & 0x0400) >> 1) | 
+								((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
+		*(u16*)(vramptr + 6) = ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | 
+								((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
 	}
 	else if (bg->ColorDepth == 16)
 	{
@@ -544,17 +583,25 @@ inline void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 		
 		if (addr & 0x10)
 		{
-			*(u16*)vramptr = ((*(u16*)vramptr) & 0xF3F3) | ((val & 0x0040) << 4) | ((val & 0x4000) >> 3) | ((val & 0x0080) >> 5) | ((val & 0x8000) >> 12);
-			*(u16*)(vramptr + 2) = ((*(u16*)(vramptr + 2)) & 0xF3F3) | ((val & 0x0010) << 6) | ((val & 0x1000) >> 1) | ((val & 0x0020) >> 3) | ((val & 0x2000) >> 10);
-			*(u16*)(vramptr + 4) = ((*(u16*)(vramptr + 4)) & 0xF3F3) | ((val & 0x0004) << 8) | ((val & 0x0400) << 1) | ((val & 0x0008) >> 1) | ((val & 0x0800) >> 8);
-			*(u16*)(vramptr + 6) = ((*(u16*)(vramptr + 6)) & 0xF3F3) | ((val & 0x0001) << 10) | ((val & 0x0100) << 3) | ((val & 0x0002) << 1) | ((val & 0x0200) >> 6);
+			*(u16*)vramptr = ((*(u16*)vramptr) & 0xF3F3) | ((val & 0x0040) << 4) | 
+							((val & 0x4000) >> 3) | ((val & 0x0080) >> 5) | ((val & 0x8000) >> 12);
+			*(u16*)(vramptr + 2) = ((*(u16*)(vramptr + 2)) & 0xF3F3) | ((val & 0x0010) << 6) | 
+							((val & 0x1000) >> 1) | ((val & 0x0020) >> 3) | ((val & 0x2000) >> 10);
+			*(u16*)(vramptr + 4) = ((*(u16*)(vramptr + 4)) & 0xF3F3) | ((val & 0x0004) << 8) | 
+							((val & 0x0400) << 1) | ((val & 0x0008) >> 1) | ((val & 0x0800) >> 8);
+			*(u16*)(vramptr + 6) = ((*(u16*)(vramptr + 6)) & 0xF3F3) | ((val & 0x0001) << 10) | 
+							((val & 0x0100) << 3) | ((val & 0x0002) << 1) | ((val & 0x0200) >> 6);
 		}
 		else
 		{
-			*(u16*)vramptr = ((*(u16*)vramptr) & 0xFCFC) | ((val & 0x0040) << 2) | ((val & 0x4000) >> 5) | ((val & 0x0080) >> 7) | ((val & 0x8000) >> 14);
-			*(u16*)(vramptr + 2) = ((*(u16*)(vramptr + 2)) & 0xFCFC) | ((val & 0x0010) << 4) | ((val & 0x1000) >> 3) | ((val & 0x0020) >> 5) | ((val & 0x2000) >> 12);
-			*(u16*)(vramptr + 4) = ((*(u16*)(vramptr + 4)) & 0xFCFC) | ((val & 0x0004) << 6) | ((val & 0x0400) >> 1) | ((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
-			*(u16*)(vramptr + 6) = ((*(u16*)(vramptr + 6)) & 0xFCFC) | ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | ((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
+			*(u16*)vramptr = ((*(u16*)vramptr) & 0xFCFC) | ((val & 0x0040) << 2) | ((val & 0x4000) >> 5) | 
+							((val & 0x0080) >> 7) | ((val & 0x8000) >> 14);
+			*(u16*)(vramptr + 2) = ((*(u16*)(vramptr + 2)) & 0xFCFC) | ((val & 0x0010) << 4) | ((val & 0x1000) >> 3) | 
+							((val & 0x0020) >> 5) | ((val & 0x2000) >> 12);
+			*(u16*)(vramptr + 4) = ((*(u16*)(vramptr + 4)) & 0xFCFC) | ((val & 0x0004) << 6) | ((val & 0x0400) >> 1) | 
+							((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
+			*(u16*)(vramptr + 6) = ((*(u16*)(vramptr + 6)) & 0xFCFC) | ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | 
+							((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
 		}
 	}
 	else
@@ -582,15 +629,16 @@ inline void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 stile)
 	
 	*(u16*)(BG_SCR_BASE + (nbg << 13) + addr - PPU_BG[nbg].ScrBase) = dtile;
 }
-extern u8 Mem_SysRAM[0x20000];
+
 inline void PPU_UpdateVRAM_OBJ(u32 addr, u16 val)
 {
 	addr -= PPU_OBJBase;
 	if (addr >= 8192) addr -= PPU_OBJGap;
 	u32 vramptr = OBJ_BASE;
-	//iprintf("OBJu %08X %04X tile %04X line %d planes %s\n", addr, val, addr&0xFFFFFFE0, (addr&0xE)<<1, (addr&0x10)?"3-4":"1-2");
-	//iprintf("%06X\n", *(u32*)&Mem_SysRAM[0] & 0xFFFFFF);
-	vramptr += addr & 0xFFFFFFE0;
+
+	//vramptr += addr & 0xFFFFFFE0;
+	vramptr += (addr & 0xFE00) << 1;
+	vramptr += addr & 0x1E0;
 	vramptr += (addr & 0xE) << 1;
 	
 	if (addr & 0x10)
@@ -637,13 +685,66 @@ inline void PPU_UpdateVRAM(u32 addr, u16 val)
 	if (block->ScrUsage & 0x0008) PPU_UpdateVRAM_SCR(3, addr, val);
 }
 
+void PPU_UpdateOAM(u16 addr, u16 val)
+{
+	if (addr < 0x200)
+	{
+		u16* oam = (u16*)(0x07000000 + ((addr & 0xFFFFFFFC) << 1));
+		switch (addr & 0x3)
+		{
+			case 0x0:	// X coord low, Y coord
+				oam[0] = (oam[0] & 0xC000) | (((val >> 8) - PPU_YOffset) & 0xFF);
+				oam[1] = (oam[1] & 0xFF00) | (val & 0xFF);
+				break;
+				
+			case 0x2:  	// tile num low, attrib
+				{
+					oam[1] = (oam[1] & 0xFFFFCFFF) | ((val & 0xC000) >> 2);
+					
+					// TODO prio
+					oam[2] = (oam[2] & 0xCE00) | ((val & 0x01F0) << 1) | (val & 0x000F) | ((val & 0x0E00) << 3) | 0x8000;
+					
+					// bit0-8: tile num
+					// bit9-11: pal
+					// bit12-13: prio
+					// bit14: Xflip
+					// bit15: Yflip
+				}
+				break;
+		}
+	}
+	else
+	{
+		addr -= 0x200;
+		u16* oam = (u16*)(0x07000000 + (addr << 5));
+		
+		int i;
+		for (i = 0; i < 8; i++)
+		{
+			u16 oval = oam[1] & 0xFFFF3EFF;
+			if (val & 0x1) oval |= 0x0100;
+			
+			u8 objsize = PPU_OBJSizes[(val & 0x2) >> 1];
+			oval |= (objsize & 0x3) << 14;
+			oam[1] = oval;
+			
+			oval = oam[0] & 0xFFFF3FFF;
+			if (objsize & 0x80) oval |= 0x8000;
+			oam[0] = oval;
+			
+			val >>= 2;
+			oam += 4;
+		}
+	}
+}
+
 
 // I/O
 // addr = lowest 8 bits of address in $21xx range
 
 u8 PPU_Read8(u32 addr)
 {
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r2-r3, r12}");
 	
 	u8 ret = 0;
 	switch (addr)
@@ -667,13 +768,13 @@ u8 PPU_Read8(u32 addr)
 		case 0x43: ret = SPC_IOPorts[7]; break;
 	}
 	
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r2-r3, r12}");
 	return ret;
 }
 
 u16 PPU_Read16(u32 addr)
 {
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r2-r3, r12}");
 	
 	u16 ret = 0;
 	switch (addr)
@@ -685,24 +786,52 @@ u16 PPU_Read16(u32 addr)
 		case 0x42: ret = *(u16*)&SPC_IOPorts[6]; break;
 	}
 	
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r2-r3, r12}");
 	return ret;
 }
-
+int lolz=0; u16 warp=0;
 void PPU_Write8(u32 addr, u8 val)
 {
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r2-r3, r12}");
 	
 	switch (addr)
 	{
 		case 0x01:
 			{
 				PPU_OBJSize = val >> 5;
+				PPU_OBJSizes = _PPU_OBJSizes + (PPU_OBJSize << 1);
 				u16 base = (val & 0x07) << 14;
 				u16 gap = (val & 0x18) << 10;
 				PPU_SetOBJCHR(base, gap);
 				iprintf("OBJ base:%08X gap:%08X | %08X\n", base, gap, (u32)&PPU_VRAM + base);
 			}
+			break;
+			
+		case 0x02:
+			PPU_OAMAddr = (PPU_OAMAddr & 0xFFFFFE01) | (val << 1);
+			break;
+		case 0x03:
+			PPU_OAMAddr = (PPU_OAMAddr & 0xFFFFFDFE) | ((val & 0x01) << 9);
+			break;
+			
+		case 0x04:
+			if (PPU_OAMAddr & 0x1)
+			{
+				PPU_OAMVal |= (val << 8);
+				u16 addr = PPU_OAMAddr - 1;
+				if (addr >= 0x220) addr -= 0x20;
+				
+				if (*(u16*)&PPU_OAM[addr] != PPU_OAMVal)
+				{
+					*(u16*)&PPU_OAM[addr] = PPU_OAMVal;
+					PPU_UpdateOAM(addr, PPU_OAMVal);
+				}
+			}
+			else
+			{
+				PPU_OAMVal = val;
+			}
+			PPU_OAMAddr++;
 			break;
 			
 		case 0x05:
@@ -817,20 +946,20 @@ void PPU_Write8(u32 addr, u8 val)
 			
 		case 0x40: SPC_IOPorts[0] = val; break;
 		case 0x41: SPC_IOPorts[1] = val; break;
-		case 0x42: if (val==0) iprintf("SPC block transfer done\n");SPC_IOPorts[2] = val; break;
+		case 0x42: SPC_IOPorts[2] = val; break;
 		case 0x43: SPC_IOPorts[3] = val; break;
-		
+				
 		default:
 			//iprintf("PPU_Write8(%08X, %08X)\n", addr, val);
 			break;
 	}
 	
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r2-r3, r12}");
 }
 
 void PPU_Write16(u32 addr, u16 val)
 {
-	asm("stmdb sp!, {r12}");
+	asm("stmdb sp!, {r2-r3, r12}");
 	
 	switch (addr)
 	{
@@ -853,5 +982,5 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 	}
 	
-	asm("ldmia sp!, {r12}");
+	asm("ldmia sp!, {r2-r3, r12}");
 }

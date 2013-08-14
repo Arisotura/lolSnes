@@ -261,8 +261,8 @@ OpTableStart:
 
 
 SPC_Reset:
-	stmdb sp!, {lr}
-	
+	stmdb sp!, {r3-r11, lr}
+
 	bl SPC_InitMisc
 	
 	mov spcA, #0
@@ -280,7 +280,7 @@ SPC_Reset:
 	mov spcCycles, #0
 	StoreRegs
 	
-	ldmia sp!, {lr}
+	ldmia sp!, {r3-r11, lr}
 	bx lr
 	
 @ --- Main loop ---------------------------------------------------------------
@@ -288,38 +288,28 @@ SPC_Reset:
 	
 SPC_Run:
 	LoadRegs
-	ldr r0, =0x04000210
-	ldr r1, [r0]
-	orr r1, r1, #0x00010000
-	str r1, [r0]
 	
 frameloop:
 		@ldr r0, =0x42AB
-		mov r0, #0x20
-		add spcCycles, spcCycles, r0
+		@add spcCycles, spcCycles, r0
+		add spcCycles, spcCycles, #0x20
 			
 emuloop:
 			stmdb sp!, {spcCycles}
-			
+
 			Prefetch8
 			ldr r0, [opTable, r0, lsl #0x2]
 			bx r0
 op_return:
-
-			@ debug crap
-			@mov r0, spcPC, lsr #0x10
-			@cmp r0, #0x0500
-		@lolz:
-		@	blt lolz
-		@	ldr r12, =0x5AF
-		@	cmp r12, spcPC, lsr #0x10
-		@	bne skipcrapo
-		@	cmp spcX, #1
-		@	crapo:
-		@	beq crapo
-		@	skipcrapo:
 		
 			@ timers emulation
+			
+			ldr r3, =SPC_IOPorts
+			ldr r3, [r3]
+			mov r2, spcPC, lsr #0x10
+			strb r2, [r3, #8]
+			mov r2, r2, lsr #0x8
+			strb r2, [r3, #9]
 		
 			ldmia sp!, {r3}
 			sub r3, r3, spcCycles
@@ -391,16 +381,19 @@ noTimer1:
 noTimer2:
 			cmp spcCycles, #1
 			bge emuloop
+			
+		@swi #0x50000
 		
-		@ sync with main CPU here
+		@ wait for timer 0
 
 		mov r0, #1
-		mov r1, #0x00010000
+		mov r1, #0x00000008
 		swi #0x40000
-		@ldr r0, =0x04000210
-		@ldr r1, [r0]
-		@orr r1, r1, #0x00010000
-		@str r1, [r0]
+		
+		@ldr r3, =0x04000180
+		@mov r0, #0x6100
+		@strh r0, [r3]
+		
 		b frameloop
 		
 .ltorg
@@ -1390,7 +1383,7 @@ OP_MOV_X_Imm:
 	b op_return
 	
 OP_MOV_X_lm:
-	GetAddr_DP
+	GetAddr_Imm
 	MemRead8
 	DO_MOV spcX, r0
 	AddCycles 4
@@ -1430,7 +1423,7 @@ OP_MOV_Y_Imm:
 	b op_return
 	
 OP_MOV_Y_lm:
-	GetAddr_DP
+	GetAddr_Imm
 	MemRead8
 	DO_MOV spcY, r0
 	AddCycles 4

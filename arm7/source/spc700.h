@@ -37,7 +37,7 @@ typedef struct
 
 extern SPC_Regs_t SPC_Regs;
 
-extern u8 SPC_Memory[0x10040];
+extern u8 SPC_ROM[0x40];
 
 extern u8* SPC_IOPorts;
 extern struct SPC_TimersStruct SPC_Timers;

@@ -54,7 +54,7 @@ u32 Mem_PtrTable[0x800] DTCM_BSS;
 // memory timings (6 or 8 master cycles)
 //u8 Mem_TimingTable[0x800] DTCM_BSS;
 
-u8 _SPC_IOPorts[10] = {0,0,0,0, 0,0,0,0, 2,2};
+u8 _SPC_IOPorts[8] = {0,0,0,0, 0,0,0,0};
 u8* SPC_IOPorts;
 
 u8 Mem_HVBJOY = 0x00;
@@ -131,7 +131,7 @@ void ROM_DoUncacheBank(int bank)
 	}
 }
 
-void _ROM_DoCacheBank(int bank, int type)
+void _ROM_DoCacheBank(int bank, int type, bool force)
 {
 	u8 idx;
 	if (bank >= 32)
@@ -140,8 +140,10 @@ void _ROM_DoCacheBank(int bank, int type)
 		else if (type == 2) idx = ROMCACHE_SIZE + 1;
 		else return;
 	}
-	else
+	else if (force)
 		idx = bank;
+	else
+		return;
 
 	int oldbank = ROM_CacheBank[idx];
 	if (oldbank == bank)
@@ -229,7 +231,7 @@ void _ROM_DoCacheBank(int bank, int type)
 void ROM_DoCacheBank(int bank, int type)
 {
 	asm("stmdb sp!, {r12}");
-	_ROM_DoCacheBank(bank, type);
+	_ROM_DoCacheBank(bank, type, false);
 	asm("ldmia sp!, {r12}");
 }
 
@@ -302,7 +304,7 @@ void Mem_Reset()
 		ROM_CacheInited = 0;
 	}
 
-	for (i = 0; i < 32; i++)
+	for (i = 0; i < 32 + 2; i++)
 		ROM_CacheBank[i] = -1;
 	ROM_CacheIndex = 0;
 
@@ -365,7 +367,7 @@ void Mem_Reset()
 		if ((i << 15) >= ROM_FileSize - ROM_BaseOffset)
 			break;
 		
-		_ROM_DoCacheBank(i, 0);
+		_ROM_DoCacheBank(i, 0, true);
 	}
 	
 	ROM_Bank0 = ROM_Cache[0];

@@ -24,8 +24,11 @@ memory			.req r4		@ pointer to the memory
 .equ flagR, 0x100	@ ROM access flag (0 = RAM, 1 = ROM)
 
 .equ flagNVHZC, 0xCB
-.equ flagNVZC, 0xC3
-.equ flagNZ,   0x82
-.equ flagNZC,  0x83
-.equ flagNVZ,  0xC2
-.equ flagVH,   0x48
+.equ flagNVZC,  0xC3
+.equ flagNZ,    0x82
+.equ flagNZC,   0x83
+.equ flagNVZ,   0xC2
+.equ flagVH,    0x48
+.equ flagNVH,   0xC8
+.equ flagNVHZ,  0xCA
+.equ flagZC,    0x03

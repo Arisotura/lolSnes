@@ -17,7 +17,11 @@ int main(void)
 	//vramSetBankA(VRAM_A_LCD);
 	videoSetMode(MODE_0_2D);
 
-	consoleDemoInit();
+	//consoleDemoInit();
+	*(u8*)0x04000242 = 0x82;
+	*(u8*)0x04000248 = 0x81;
+	videoSetModeSub(MODE_0_2D);
+	consoleInit(NULL, 0, BgType_Text4bpp, BgSize_T_256x256, 2, 0, false, true);
 	
 #ifdef NITROFS_ROM
 	if (!nitroFSInit())

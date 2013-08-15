@@ -64,7 +64,8 @@ PPU_VRAMBlock PPU_VRAMMap[64];
 // 0x06000000 : bank A/B: BG chr data
 // 0x06400000 : bank E: OBJ chr data
 // bank F/G: BG ext palettes
-// (bank C: console shiz)
+// bank C: ARM7 VRAM
+// bank H: bottom screen
 
 typedef struct
 {

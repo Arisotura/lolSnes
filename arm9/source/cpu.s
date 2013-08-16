@@ -716,6 +716,9 @@ op_return:
 				@ wtf?
 				@ a fix would be welcome.
 				ldr r0, =0x04000130
+				ldrh r0, [r0]
+				tst r0, #1
+				bleq printvar
 
 skip_spc700:
 				@ <= 1360 (550): HBlank end

@@ -54,7 +54,7 @@ u32 Mem_PtrTable[0x800] DTCM_BSS;
 // memory timings (6 or 8 master cycles)
 //u8 Mem_TimingTable[0x800] DTCM_BSS;
 
-u8 _SPC_IOPorts[8] = {0,0,0,0, 0,0,0,0};
+u8 _SPC_IOPorts[10] = {0,0,0,0, 0,0,0,0, 2,2};
 u8* SPC_IOPorts;
 
 u8 Mem_HVBJOY = 0x00;
@@ -477,10 +477,10 @@ u8 Mem_GIORead8(u32 addr)
 			break;
 		case 0x19:
 			{
-				u16 keys = *(u16*)0x04000130;
+				//u16 keys = *(u16*)0x04000130;
 
-				if (keys & 0x0004) ret |= 0x20;
-				if (keys & 0x0008) ret |= 0x10;
+				//if (keys & 0x0004) ret |= 0x20;
+				//if (keys & 0x0008) ret |= 0x10;
 			}
 			break;
 	}
@@ -498,10 +498,10 @@ u16 Mem_GIORead16(u32 addr)
 	{
 		case 0x18:
 			{
-				u16 keys = *(u16*)0x04000130;
+				//u16 keys = *(u16*)0x04000130;
 
-				if (keys & 0x0004) ret |= 0x200000;
-				if (keys & 0x0008) ret |= 0x100000;
+				//if (keys & 0x0004) ret |= 0x200000;
+				//if (keys & 0x0008) ret |= 0x100000;
 			}
 			break;
 	}

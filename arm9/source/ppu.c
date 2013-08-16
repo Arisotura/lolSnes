@@ -27,6 +27,7 @@ u8 PPU_VRAM[0x10000];
 u16 PPU_VRAMAddr = 0;
 u16 PPU_VRAMVal = 0;
 u8 PPU_VRAMInc = 0;
+u8 PPU_VRAMStep = 0;
 
 u8 PPU_OAM[0x220];
 u16 PPU_OAMAddr = 0;
@@ -70,12 +71,10 @@ PPU_VRAMBlock PPU_VRAMMap[64];
 typedef struct
 {
 	u16 ChrBase;
-	u16 ChrSize;
 	u16 ScrBase;
+	u32 ChrSize;
 	u16 ScrSize;	// size of the scr data (2K/4K/8K)
 	u16 MapSize;	// BG size (0-3)
-	
-	u16 __pad0;
 	
 	int ColorDepth;
 	
@@ -869,9 +868,16 @@ void PPU_Write8(u32 addr, u8 val)
 			
 		
 		case 0x15:
-			if ((val & 0x7F) != 0x00) iprintf("UNSUPPORTED VRAM MODE %02X\n", val);
+			if ((val & 0x7C) != 0x00) iprintf("UNSUPPORTED VRAM MODE %02X\n", val);
 			//printf("vram = %08X\n", (u32)&PPU_VRAM);
 			PPU_VRAMInc = val;
+			switch (val & 0x03)
+			{
+				case 0x00: PPU_VRAMStep = 1; break;
+				case 0x01: PPU_VRAMStep = 32; break;
+				case 0x02:
+				case 0x03: PPU_VRAMStep = 128; break;
+			}
 			break;
 			
 		case 0x16:
@@ -892,10 +898,7 @@ void PPU_Write8(u32 addr, u8 val)
 					PPU_UpdateVRAM(addr, *(u16*)&PPU_VRAM[addr]);
 				}
 				if (!(PPU_VRAMInc & 0x80))
-				{
-					PPU_VRAMAddr++;
-					// TODO: support other increment modes
-				}
+					PPU_VRAMAddr += PPU_VRAMStep;
 			}
 			break;
 		case 0x19:
@@ -908,10 +911,7 @@ void PPU_Write8(u32 addr, u8 val)
 					PPU_UpdateVRAM(addr, *(u16*)&PPU_VRAM[addr]);
 				}
 				if (PPU_VRAMInc & 0x80)
-				{
-					PPU_VRAMAddr++;
-					// TODO: support other increment modes
-				}
+					PPU_VRAMAddr += PPU_VRAMStep;
 			}
 			break;
 			

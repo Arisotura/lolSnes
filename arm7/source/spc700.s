@@ -855,7 +855,6 @@ OP_BVS:
 	AddCycles 5
 	b op_return
 1:
-	MemWrite8 r2, r1
 	GetOp_Imm
 	mov r0, r0, lsl #0x18
 	add spcPC, spcPC, r0, asr #0x8
@@ -897,7 +896,6 @@ OP_BBC_7:
 	AddCycles 5
 	b op_return
 1:
-	MemWrite8 r2, r1
 	GetOp_Imm
 	mov r0, r0, lsl #0x18
 	add spcPC, spcPC, r0, asr #0x8

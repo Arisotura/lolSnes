@@ -54,8 +54,8 @@ u32 Mem_PtrTable[0x800] DTCM_BSS;
 // memory timings (6 or 8 master cycles)
 //u8 Mem_TimingTable[0x800] DTCM_BSS;
 
-u8 _SPC_IOPorts[10] = {0,0,0,0, 0,0,0,0, 2,2};
-u8* SPC_IOPorts;
+IPCStruct _IPC = {0};
+IPCStruct* IPC;
 
 u8 Mem_HVBJOY = 0x00;
 
@@ -236,6 +236,64 @@ void ROM_DoCacheBank(int bank, int type)
 }
 
 
+void ROM_ApplySpeedHacks()
+{
+	// TODO look into other banks? low priority I guess
+	// most games would put their main loop into bank 0
+	u8* bank = ROM_Bank0;
+	int i, status, start;
+	u8 flagaddr = 0x00;
+	
+	// TODO support for SuperDAT speedhacks?
+	// (main issue is that the SuperDAT contains all kinds of hacks, including ones we may not want)
+	
+	// WAI: 0xCB
+	// NOP: 0xEA
+	
+	// speed hack 1: turn SMW-style idle loop into WAI loop
+	// loop form: LDA $xx | BEQ start | stuff | BRA start
+	status = 0; start = 0;
+	for (i = 2; i < 0x8000;)
+	{
+		if (bank[i] == 0xA5 && bank[i+2] == 0xF0 && bank[i+3] == 0xFC)
+		{
+			status = 1;
+			start = i;
+			flagaddr = bank[i+1];
+			i += 4;
+		}
+		else if (status == 1)
+		{
+			if (bank[i] == 0x80 && (s8)bank[i+1] == (start - (i + 2)))
+			{
+				/*bank[start-2] = 0x80;
+				bank[start-1] = 0x02;
+				bank[start] = 0xCB;
+				//bank[start+1] = 0xE6;
+				//bank[start+2] = flagaddr;
+				bank[start+1] = 0xEA;
+				bank[start+2] = 0xEA;
+				bank[start+3] = 0xEA;*/
+				u8 branchtype = bank[start+2];
+				bank[start+2] = 0x42;
+				bank[start+3] = (bank[start+3] & 0x0F) | (branchtype & 0xF0);
+				
+				iprintf("Speed hack installed @ 80:%04X\n", 0x8000+start);
+				
+				status = 0;
+			}
+			
+			i += 2;
+		}
+		else
+		{
+			status = 0;
+			i++;
+		}
+	}
+}
+
+
 bool Mem_LoadROM(char* path)
 {
 	FILE* oldfile = ROM_File;
@@ -373,14 +431,17 @@ void Mem_Reset()
 	ROM_Bank0 = ROM_Cache[0];
 	ROM_Bank0End = ROM_Bank0 + 0x8000;
 	
+	// breaks CPU/SPC sync
+	//ROM_ApplySpeedHacks();
+	
 	iprintf("mm %08X\n", (void*)Mem_ROMRead16);
 	iprintf("sysram = %08X | %08X\n", &Mem_SysRAM[0], MEM_PTR(0x7F, 0x8000));
 	
 		// get uncached address
-	SPC_IOPorts = (u8*)((u32)(&_SPC_IOPorts[0]) | 0x00400000);
-	iprintf("SPC IO = %08X\n", SPC_IOPorts);
+	IPC = (u8*)((u32)(&_IPC) | 0x00400000);
+	iprintf("IPC struct = %08X\n", IPC);
 	fifoSendValue32(FIFO_USER_01, 3);
-	fifoSendAddress(FIFO_USER_01, SPC_IOPorts);
+	fifoSendAddress(FIFO_USER_01, IPC);
 	
 	Mem_HVBJOY = 0x00;
 	
@@ -457,6 +518,39 @@ ITCM_CODE void report_unk_lol(u32 op, u32 pc)
 }
 
 
+inline u8 IO_ReadKeysLow()
+{
+	u16 keys = *(u16*)0x04000130;
+	u8 keys2 = IPC->Input_XY;
+	u8 ret = 0;
+	
+	if (!(keys & 0x0001)) ret |= 0x80;
+	if (!(keys2 & 0x01)) ret |= 0x40;
+	if (!(keys & 0x0200)) ret |= 0x20;
+	if (!(keys & 0x0100)) ret |= 0x10;
+	
+	return ret;
+}
+
+inline u8 IO_ReadKeysHigh()
+{
+	u16 keys = *(u16*)0x04000130;
+	u8 keys2 = IPC->Input_XY;
+	u8 ret = 0;
+	
+	if (!(keys & 0x0002)) ret |= 0x80;
+	if (!(keys2 & 0x02)) ret |= 0x40;
+	if (!(keys & 0x0004)) ret |= 0x20;
+	if (!(keys & 0x0008)) ret |= 0x10;
+	if (!(keys & 0x0040)) ret |= 0x08;
+	if (!(keys & 0x0080)) ret |= 0x04;
+	if (!(keys & 0x0020)) ret |= 0x02;
+	if (!(keys & 0x0010)) ret |= 0x01;
+	
+	return ret;
+}
+
+
 u8 Mem_GIORead8(u32 addr)
 {
 	asm("stmdb sp!, {r12}");
@@ -473,15 +567,10 @@ u8 Mem_GIORead8(u32 addr)
 			break;
 			
 		case 0x18:
-			ret = 0;	// todo
+			ret = IO_ReadKeysLow();
 			break;
 		case 0x19:
-			{
-				//u16 keys = *(u16*)0x04000130;
-
-				//if (keys & 0x0004) ret |= 0x20;
-				//if (keys & 0x0008) ret |= 0x10;
-			}
+			ret = IO_ReadKeysHigh();
 			break;
 	}
 	
@@ -497,12 +586,7 @@ u16 Mem_GIORead16(u32 addr)
 	switch (addr)
 	{
 		case 0x18:
-			{
-				//u16 keys = *(u16*)0x04000130;
-
-				//if (keys & 0x0004) ret |= 0x200000;
-				//if (keys & 0x0008) ret |= 0x100000;
-			}
+			ret = IO_ReadKeysLow() | (IO_ReadKeysHigh() << 8);
 			break;
 	}
 	

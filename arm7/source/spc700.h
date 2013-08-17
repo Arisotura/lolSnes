@@ -2,6 +2,8 @@
 #ifndef _SPC700_H_
 #define _SPC700_H_
 
+#include "../../common/ipc.h"
+
 typedef union
 {
 	u16 val;
@@ -39,7 +41,6 @@ extern SPC_Regs_t SPC_Regs;
 
 extern u8 SPC_ROM[0x40];
 
-extern u8* SPC_IOPorts;
 extern struct SPC_TimersStruct SPC_Timers;
 
 	

@@ -2,6 +2,8 @@
 #ifndef _MEMORY_H_
 #define _MEMORY_H_
 
+#include "../../common/ipc.h"
+
 #define ROMCACHE_SIZE 32
 
 extern u8* ROM_Cache[2 + ROMCACHE_SIZE];
@@ -12,8 +14,6 @@ extern bool Mem_HiROM;
 extern u32 Mem_PtrTable[0x800] DTCM_BSS;
 
 extern u8 Mem_SysRAM[0x20000];
-
-extern u8* SPC_IOPorts;
 
 extern u8 Mem_HVBJOY;
 

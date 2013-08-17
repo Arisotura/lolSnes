@@ -32,6 +32,17 @@
 #include "spc700.h"
 
 
+IPCStruct* IPC = 0;
+
+
+void vblank()
+{
+	if (!IPC) return;
+	
+	IPC->Input_XY = *(volatile u8*)0x04000136;
+}
+
+
 int main() 
 {
 	readUserSettings();
@@ -40,6 +51,9 @@ int main()
 	fifoInit();
 
 	installSystemFIFO();
+	
+	irqEnable(IRQ_VBLANK);
+	irqSet(IRQ_VBLANK, vblank);
 	
 	// wait till the ARM9 has mapped VRAM for us
 	for (;;)
@@ -77,7 +91,7 @@ int main()
 					
 				case 3:
 					while (!fifoCheckAddress(FIFO_USER_01));
-					SPC_IOPorts = fifoGetAddress(FIFO_USER_01);
+					IPC = fifoGetAddress(FIFO_USER_01);
 					break;
 			}
 		}

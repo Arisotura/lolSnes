@@ -502,6 +502,9 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 		
 		PPU_UploadBGScr(nbg);
 	}
+	
+	u16* bgctrl = (u16*)(0x04000008 + (nbg << 2));
+	*bgctrl = (*bgctrl & 0xFFFF3FFF) | ((val & 0x03) << 14);
 }
 
 inline void PPU_SetBGCHR(int nbg, u8 val)
@@ -762,10 +765,10 @@ u8 PPU_Read8(u32 addr)
 		}
 		break;
 		
-		case 0x40: ret = SPC_IOPorts[4]; break;
-		case 0x41: ret = SPC_IOPorts[5]; break;
-		case 0x42: ret = SPC_IOPorts[6]; break;
-		case 0x43: ret = SPC_IOPorts[7]; break;
+		case 0x40: ret = IPC->SPC_IOPorts[4]; break;
+		case 0x41: ret = IPC->SPC_IOPorts[5]; break;
+		case 0x42: ret = IPC->SPC_IOPorts[6]; break;
+		case 0x43: ret = IPC->SPC_IOPorts[7]; break;
 	}
 	
 	asm("ldmia sp!, {r2-r3, r12}");
@@ -782,8 +785,8 @@ u16 PPU_Read16(u32 addr)
 		// not in the right place, but well
 		// our I/O functions are mapped to the whole $21xx range
 		
-		case 0x40: ret = *(u16*)&SPC_IOPorts[4]; break;
-		case 0x42: ret = *(u16*)&SPC_IOPorts[6]; break;
+		case 0x40: ret = *(u16*)&IPC->SPC_IOPorts[4]; break;
+		case 0x42: ret = *(u16*)&IPC->SPC_IOPorts[6]; break;
 	}
 	
 	asm("ldmia sp!, {r2-r3, r12}");
@@ -945,10 +948,10 @@ void PPU_Write8(u32 addr, u8 val)
 			iprintf("21%02X = %02X\n", addr, val);
 			break;
 			
-		case 0x40: SPC_IOPorts[0] = val; break;
-		case 0x41: SPC_IOPorts[1] = val; break;
-		case 0x42: SPC_IOPorts[2] = val; break;
-		case 0x43: SPC_IOPorts[3] = val; break;
+		case 0x40: IPC->SPC_IOPorts[0] = val; break;
+		case 0x41: IPC->SPC_IOPorts[1] = val; break;
+		case 0x42: IPC->SPC_IOPorts[2] = val; break;
+		case 0x43: IPC->SPC_IOPorts[3] = val; break;
 				
 		default:
 			//iprintf("PPU_Write8(%08X, %08X)\n", addr, val);
@@ -970,8 +973,8 @@ void PPU_Write16(u32 addr, u16 val)
 			PPU_VRAMAddr = val;
 			break;
 			
-		case 0x40: *(u16*)&SPC_IOPorts[0] = val; break;
-		case 0x42: *(u16*)&SPC_IOPorts[2] = val; break;
+		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
+		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

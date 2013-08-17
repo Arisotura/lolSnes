@@ -2,7 +2,8 @@
 .arm
 
 @ --- TODO --------------------------------------------------------------------
-@ HIGH PRIORITY: FIX WAIT MODE
+@
+@ H/V match IRQ
 @
 @ (low priority-- aka who cares)
 @ * for some addressing modes using X/Y, add 1 cycle if adding X/Y crosses page boundary
@@ -339,7 +340,7 @@ OpTableStart:
 	.long OP_PLP, OP_m0_AND_Imm, OP_m0_ROL_A, OP_PLD, OP_m0_BIT_Abs, OP_m0_AND_Abs, OP_m0_ROL_Abs, OP_m0_AND_AbsLong
 	.long OP_BMI, OP_m0_AND_DPIndirectIndY, OP_m0_AND_DPIndirect, OP_m0_AND_SRIndirectIndY, OP_m0_BIT_DPIndX, OP_m0_AND_DPIndX, OP_m0_ROL_DPIndX, OP_m0_AND_DPIndirectLongIndY	@ 3
 	.long OP_SEC, OP_m0_AND_AbsIndY, OP_m0_DEC_A, OP_TSC, OP_m0_BIT_AbsIndX, OP_m0_AND_AbsIndX, OP_m0_ROL_AbsIndX, OP_m0_AND_AbsLongIndX
-	.long OP_e0_RTI, OP_m0_EOR_DPIndIndirectX, OP_UNK, OP_m0_EOR_SR, OP_x0_MVP, OP_m0_EOR_DP, OP_m0_LSR_DP, OP_m0_EOR_DPIndirectLong	@ 4
+	.long OP_e0_RTI, OP_m0_EOR_DPIndIndirectX, OP_HAX42, OP_m0_EOR_SR, OP_x0_MVP, OP_m0_EOR_DP, OP_m0_LSR_DP, OP_m0_EOR_DPIndirectLong	@ 4
 	.long OP_m0_PHA, OP_m0_EOR_Imm, OP_m0_LSR_A, OP_PHK, OP_JMP_Abs, OP_m0_EOR_Abs, OP_m0_LSR_Abs, OP_m0_EOR_AbsLong
 	.long OP_BVC, OP_m0_EOR_DPIndirectIndY, OP_m0_EOR_DPIndirect, OP_m0_EOR_SRIndirectIndY, OP_x0_MVN, OP_m0_EOR_DPIndX, OP_m0_LSR_DPIndX, OP_m0_EOR_DPIndirectLongIndY	@ 5
 	.long OP_CLI, OP_m0_EOR_AbsIndY, OP_x0_PHY, OP_TCD, OP_JMP_AbsLong, OP_m0_EOR_AbsIndX, OP_m0_LSR_AbsIndX, OP_m0_EOR_AbsLongIndX
@@ -373,7 +374,7 @@ OpTableStart:
 	.long OP_PLP, OP_m0_AND_Imm, OP_m0_ROL_A, OP_PLD, OP_m0_BIT_Abs, OP_m0_AND_Abs, OP_m0_ROL_Abs, OP_m0_AND_AbsLong
 	.long OP_BMI, OP_m0_AND_DPIndirectIndY, OP_m0_AND_DPIndirect, OP_m0_AND_SRIndirectIndY, OP_m0_BIT_DPIndX, OP_m0_AND_DPIndX, OP_m0_ROL_DPIndX, OP_m0_AND_DPIndirectLongIndY	@ 3
 	.long OP_SEC, OP_m0_AND_AbsIndY, OP_m0_DEC_A, OP_TSC, OP_m0_BIT_AbsIndX, OP_m0_AND_AbsIndX, OP_m0_ROL_AbsIndX, OP_m0_AND_AbsLongIndX
-	.long OP_e0_RTI, OP_m0_EOR_DPIndIndirectX, OP_UNK, OP_m0_EOR_SR, OP_x1_MVP, OP_m0_EOR_DP, OP_m0_LSR_DP, OP_m0_EOR_DPIndirectLong	@ 4
+	.long OP_e0_RTI, OP_m0_EOR_DPIndIndirectX, OP_HAX42, OP_m0_EOR_SR, OP_x1_MVP, OP_m0_EOR_DP, OP_m0_LSR_DP, OP_m0_EOR_DPIndirectLong	@ 4
 	.long OP_m0_PHA, OP_m0_EOR_Imm, OP_m0_LSR_A, OP_PHK, OP_JMP_Abs, OP_m0_EOR_Abs, OP_m0_LSR_Abs, OP_m0_EOR_AbsLong
 	.long OP_BVC, OP_m0_EOR_DPIndirectIndY, OP_m0_EOR_DPIndirect, OP_m0_EOR_SRIndirectIndY, OP_x1_MVN, OP_m0_EOR_DPIndX, OP_m0_LSR_DPIndX, OP_m0_EOR_DPIndirectLongIndY	@ 5
 	.long OP_CLI, OP_m0_EOR_AbsIndY, OP_x1_PHY, OP_TCD, OP_JMP_AbsLong, OP_m0_EOR_AbsIndX, OP_m0_LSR_AbsIndX, OP_m0_EOR_AbsLongIndX
@@ -407,7 +408,7 @@ OpTableStart:
 	.long OP_PLP, OP_m1_AND_Imm, OP_m1_ROL_A, OP_PLD, OP_m1_BIT_Abs, OP_m1_AND_Abs, OP_m1_ROL_Abs, OP_m1_AND_AbsLong
 	.long OP_BMI, OP_m1_AND_DPIndirectIndY, OP_m1_AND_DPIndirect, OP_m1_AND_SRIndirectIndY, OP_m1_BIT_DPIndX, OP_m1_AND_DPIndX, OP_m1_ROL_DPIndX, OP_m1_AND_DPIndirectLongIndY	@ 3
 	.long OP_SEC, OP_m1_AND_AbsIndY, OP_m1_DEC_A, OP_TSC, OP_m1_BIT_AbsIndX, OP_m1_AND_AbsIndX, OP_m1_ROL_AbsIndX, OP_m1_AND_AbsLongIndX
-	.long OP_e0_RTI, OP_m1_EOR_DPIndIndirectX, OP_UNK, OP_m1_EOR_SR, OP_x0_MVP, OP_m1_EOR_DP, OP_m1_LSR_DP, OP_m1_EOR_DPIndirectLong	@ 4
+	.long OP_e0_RTI, OP_m1_EOR_DPIndIndirectX, OP_HAX42, OP_m1_EOR_SR, OP_x0_MVP, OP_m1_EOR_DP, OP_m1_LSR_DP, OP_m1_EOR_DPIndirectLong	@ 4
 	.long OP_m1_PHA, OP_m1_EOR_Imm, OP_m1_LSR_A, OP_PHK, OP_JMP_Abs, OP_m1_EOR_Abs, OP_m1_LSR_Abs, OP_m1_EOR_AbsLong
 	.long OP_BVC, OP_m1_EOR_DPIndirectIndY, OP_m1_EOR_DPIndirect, OP_m1_EOR_SRIndirectIndY, OP_x0_MVN, OP_m1_EOR_DPIndX, OP_m1_LSR_DPIndX, OP_m1_EOR_DPIndirectLongIndY	@ 5
 	.long OP_CLI, OP_m1_EOR_AbsIndY, OP_x0_PHY, OP_TCD, OP_JMP_AbsLong, OP_m1_EOR_AbsIndX, OP_m1_LSR_AbsIndX, OP_m1_EOR_AbsLongIndX
@@ -441,14 +442,14 @@ OpTableStart:
 	.long OP_PLP, OP_m1_AND_Imm, OP_m1_ROL_A, OP_PLD, OP_m1_BIT_Abs, OP_m1_AND_Abs, OP_m1_ROL_Abs, OP_m1_AND_AbsLong
 	.long OP_BMI, OP_m1_AND_DPIndirectIndY, OP_m1_AND_DPIndirect, OP_m1_AND_SRIndirectIndY, OP_m1_BIT_DPIndX, OP_m1_AND_DPIndX, OP_m1_ROL_DPIndX, OP_m1_AND_DPIndirectLongIndY	@ 3
 	.long OP_SEC, OP_m1_AND_AbsIndY, OP_m1_DEC_A, OP_TSC, OP_m1_BIT_AbsIndX, OP_m1_AND_AbsIndX, OP_m1_ROL_AbsIndX, OP_m1_AND_AbsLongIndX
-	.long OP_e0_RTI, OP_m1_EOR_DPIndIndirectX, OP_UNK, OP_m1_EOR_SR, OP_x1_MVP, OP_m1_EOR_DP, OP_m1_LSR_DP, OP_m1_EOR_DPIndirectLong	@ 4
+	.long OP_e0_RTI, OP_m1_EOR_DPIndIndirectX, OP_HAX42, OP_m1_EOR_SR, OP_x1_MVP, OP_m1_EOR_DP, OP_m1_LSR_DP, OP_m1_EOR_DPIndirectLong	@ 4
 	.long OP_m1_PHA, OP_m1_EOR_Imm, OP_m1_LSR_A, OP_PHK, OP_JMP_Abs, OP_m1_EOR_Abs, OP_m1_LSR_Abs, OP_m1_EOR_AbsLong
 	.long OP_BVC, OP_m1_EOR_DPIndirectIndY, OP_m1_EOR_DPIndirect, OP_m1_EOR_SRIndirectIndY, OP_x1_MVN, OP_m1_EOR_DPIndX, OP_m1_LSR_DPIndX, OP_m1_EOR_DPIndirectLongIndY	@ 5
-	.long OP_CLI, OP_m1_EOR_AbsIndY, OP_x1_PHY, OP_TDC, OP_JMP_AbsLong, OP_m1_EOR_AbsIndX, OP_m1_LSR_AbsIndX, OP_m1_EOR_AbsLongIndX
+	.long OP_CLI, OP_m1_EOR_AbsIndY, OP_x1_PHY, OP_TCD, OP_JMP_AbsLong, OP_m1_EOR_AbsIndX, OP_m1_LSR_AbsIndX, OP_m1_EOR_AbsLongIndX
 	.long OP_RTS, OP_m1_ADC_DPIndIndirectX, OP_PER, OP_m1_ADC_SR, OP_m1_STZ_DP, OP_m1_ADC_DP, OP_m1_ROR_DP, OP_m1_ADC_DPIndirectLong	@ 6
 	.long OP_m1_PLA, OP_m1_ADC_Imm, OP_m1_ROR_A, OP_RTL, OP_JMP_AbsIndirect, OP_m1_ADC_Abs, OP_m1_ROR_Abs, OP_m1_ADC_AbsLong
 	.long OP_BVS, OP_m1_ADC_DPIndirectIndY, OP_m1_ADC_DPIndirect, OP_m1_ADC_SRIndirectIndY, OP_m1_STZ_DPIndX, OP_m1_ADC_DPIndX, OP_m1_ROR_DPIndX, OP_m1_ADC_DPIndirectLongIndY	@ 7
-	.long OP_SEI, OP_m1_ADC_AbsIndY, OP_x1_PLY, OP_UNK, OP_JMP_AbsIndIndirect, OP_m1_ADC_AbsIndX, OP_m1_ROR_AbsIndX, OP_m1_ADC_AbsLongIndX
+	.long OP_SEI, OP_m1_ADC_AbsIndY, OP_x1_PLY, OP_TDC, OP_JMP_AbsIndIndirect, OP_m1_ADC_AbsIndX, OP_m1_ROR_AbsIndX, OP_m1_ADC_AbsLongIndX
 	.long OP_BRA, OP_m1_STA_DPIndIndirectX, OP_BRL, OP_m1_STA_SR, OP_x1_STY_DP, OP_m1_STA_DP, OP_x1_STX_DP, OP_m1_STA_DPIndirectLong	@ 8
 	.long OP_x1_DEY, OP_m1_BIT_Imm, OP_m1_TXA, OP_PHB, OP_x1_STY_Abs, OP_m1_STA_Abs, OP_x1_STX_Abs, OP_m1_STA_AbsLong
 	.long OP_BCC, OP_m1_STA_DPIndirectIndY, OP_m1_STA_DPIndirect, OP_m1_STA_SRIndirectIndY, OP_x1_STY_DPIndX, OP_m1_STA_DPIndX, OP_x1_STX_DPIndY, OP_m1_STA_DPIndirectLongIndY	@ 9
@@ -475,7 +476,7 @@ OpTableStart:
 	.long OP_PLP, OP_m1_AND_Imm, OP_m1_ROL_A, OP_PLD, OP_m1_BIT_Abs, OP_m1_AND_Abs, OP_m1_ROL_Abs, OP_m1_AND_AbsLong
 	.long OP_BMI, OP_m1_AND_DPIndirectIndY, OP_m1_AND_DPIndirect, OP_m1_AND_SRIndirectIndY, OP_m1_BIT_DPIndX, OP_m1_AND_DPIndX, OP_m1_ROL_DPIndX, OP_m1_AND_DPIndirectLongIndY	@ 3
 	.long OP_SEC, OP_m1_AND_AbsIndY, OP_m1_DEC_A, OP_TSC, OP_m1_BIT_AbsIndX, OP_m1_AND_AbsIndX, OP_m1_ROL_AbsIndX, OP_m1_AND_AbsLongIndX
-	.long OP_e1_RTI, OP_m1_EOR_DPIndIndirectX, OP_UNK, OP_m1_EOR_SR, OP_x1_MVP, OP_m1_EOR_DP, OP_m1_LSR_DP, OP_m1_EOR_DPIndirectLong	@ 4
+	.long OP_e1_RTI, OP_m1_EOR_DPIndIndirectX, OP_HAX42, OP_m1_EOR_SR, OP_x1_MVP, OP_m1_EOR_DP, OP_m1_LSR_DP, OP_m1_EOR_DPIndirectLong	@ 4
 	.long OP_m1_PHA, OP_m1_EOR_Imm, OP_m1_LSR_A, OP_PHK, OP_JMP_Abs, OP_m1_EOR_Abs, OP_m1_LSR_Abs, OP_m1_EOR_AbsLong
 	.long OP_BVC, OP_m1_EOR_DPIndirectIndY, OP_m1_EOR_DPIndirect, OP_m1_EOR_SRIndirectIndY, OP_x1_MVN, OP_m1_EOR_DPIndX, OP_m1_LSR_DPIndX, OP_m1_EOR_DPIndirectLongIndY	@ 5
 	.long OP_CLI, OP_m1_EOR_AbsIndY, OP_x1_PHY, OP_TCD, OP_JMP_AbsLong, OP_m1_EOR_AbsIndX, OP_m1_LSR_AbsIndX, OP_m1_EOR_AbsLongIndX
@@ -679,10 +680,16 @@ frameloop:
 		b emuloop
 		
 newline:
+			@ if in wait mode, jump right to the next VBlank
+			@ TODO IRQ support
+			tst snesP, #flagW
+			beq notwaiting
+			add snesCycles, snesCycles, #0x00000001
+			b emulate_hardware
+			
+notwaiting:
 			ldr r0, =0x05540001
 			add snesCycles, snesCycles, r0
-			@tst snesP, #flagW
-			@bne emulate_hardware
 			
 emuloop:
 				@stmdb sp!, {snesCycles}
@@ -718,7 +725,7 @@ op_return:
 				ldr r0, =0x04000130
 				ldrh r0, [r0]
 				tst r0, #1
-				bleq printvar
+				@bleq printvar
 
 skip_spc700:
 				@ <= 1360 (550): HBlank end
@@ -4346,3 +4353,61 @@ OP_e1_XCE:
 	UpdateCPUMode
 	AddCycles 1
 	b op_return
+	
+@ --- Speed hack opcodes ------------------------------------------------------
+@
+@ opcode 42: eat cycles and branch back
+@ opcode DB: eat cycles and branch (TODO)
+@
+@ -----------------------------------------------------------------------------
+
+hax_branch:
+	add snesPC, snesPC, r0, lsl #0x10
+	b emulate_hardware
+	
+hax_nobranch:
+	add snesPC, snesPC, #0x10000
+	b emulate_hardware
+	
+
+OP_HAX42:
+	mov snesCycles, snesCycles, lsl #0x10
+	mov snesCycles, snesCycles, lsr #0x10
+	ldrb r0, [r2, #1]
+	and r1, r0, #0xE0
+	and r0, r0, #0x0F
+	sub r0, r0, #0x10
+	add pc, pc, r1, lsr #1
+	nop
+	tst snesP, #flagN
+	beq hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagN
+	bne hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagV
+	beq hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagV
+	bne hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagC
+	beq hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagC
+	bne hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagZ
+	beq hax_branch
+	b hax_nobranch
+	nop
+	tst snesP, #flagZ
+	bne hax_branch
+	b hax_nobranch
+	nop

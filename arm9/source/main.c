@@ -58,6 +58,6 @@ int main(void)
 void printvar()
 {
 	asm("stmdb sp!, {r12}");
-	iprintf("printvar %02X%02X\n", SPC_IOPorts[9], SPC_IOPorts[8]);
+	iprintf("printvar %04X\n", IPC->_debug);
 	asm("ldmia sp!, {r12}");
 }

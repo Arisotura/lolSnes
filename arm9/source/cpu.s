@@ -697,9 +697,6 @@ emuloop:
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
-
-				ldr r0, =lolpc
-				str snesPC, [r0]
 				
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start

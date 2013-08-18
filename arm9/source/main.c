@@ -10,10 +10,13 @@
 #include "memory.h"
 #include "ppu.h"
 
-
+u32 lolpc = 0;
 void vblank()
 {
 	PPU_VBlank();
+	
+	u16 keys = *(volatile u16*)0x04000130;
+	if (!(keys & 0x0001)) iprintf("SPC PC = %04X\nCPU PC = %04X\n", IPC->_debug, lolpc >> 16);
 }
 
 

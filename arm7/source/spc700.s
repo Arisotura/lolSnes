@@ -317,12 +317,12 @@ op_return:
 			@ timers emulation
 			
 			@ debug
-			@ldr r3, =SPC_IOPorts
-			@ldr r3, [r3]
-			@mov r2, spcPC, lsr #0x10
-			@strb r2, [r3, #8]
-			@mov r2, r2, lsr #0x8
-			@strb r2, [r3, #9]
+			ldr r3, =IPC
+			ldr r3, [r3]
+			mov r2, spcPC, lsr #0x10
+			strb r2, [r3, #8]
+			mov r2, r2, lsr #0x8
+			strb r2, [r3, #9]
 		
 			ldmia sp!, {r3}
 			sub r3, r3, spcCycles

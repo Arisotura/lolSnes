@@ -228,11 +228,12 @@ CPU_Regs:
 	add snesPC, snesPC, #0x10000
 .endm
 
-.macro Prefetch8
+@ can be used multiple times-- r0 or r1 should be used as dest
+.macro Prefetch8 dst=r0
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0x60000
 	subne snesCycles, snesCycles, #0x80000
-	ldrb r0, [r2, #1]
+	ldrb \dst, [r2, #1]!
 	add snesPC, snesPC, #0x10000
 .endm
 
@@ -696,16 +697,10 @@ emuloop:
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
-				
-				@ leaving this in keeps SPC transfers from breaking
-				@ wtf?
-				@ a fix would be welcome.
-				@ldr r0, =0x04000130
-				@ldrh r0, [r0]
-				@tst r0, #1
-				@bleq printvar
 
-skip_spc700:
+				ldr r0, =lolpc
+				str snesPC, [r0]
+				
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start
 				cmp snesCycles, #0x10C0000
@@ -2804,9 +2799,9 @@ OP_m1_LSR_DPIndX:
 @ --- MVN ---------------------------------------------------------------------
 
 OP_x0_MVN:
+	Prefetch8 r1
 	Prefetch8
-	orr r2, snesY, r0, lsl #0x10
-	Prefetch8
+	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
 	mov r1, r0
@@ -2824,9 +2819,9 @@ OP_x0_MVN:
 	b op_return
 	
 OP_x1_MVN:
+	Prefetch8 r1
 	Prefetch8
-	orr r2, snesY, r0, lsl #0x10
-	Prefetch8
+	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
 	mov r1, r0
@@ -2848,9 +2843,9 @@ OP_x1_MVN:
 @ --- MVP ---------------------------------------------------------------------
 
 OP_x0_MVP:
+	Prefetch8 r1
 	Prefetch8
-	orr r2, snesY, r0, lsl #0x10
-	Prefetch8
+	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
 	mov r1, r0
@@ -2868,9 +2863,9 @@ OP_x0_MVP:
 	b op_return
 	
 OP_x1_MVP:
+	Prefetch8 r1
 	Prefetch8
-	orr r2, snesY, r0, lsl #0x10
-	Prefetch8
+	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
 	mov r1, r0

@@ -9,6 +9,7 @@
 // * track individual palette modifications
 // * track BG CHR modifications
 // * everything regarding OBJ
+// * (take SPC stuff out of the PPU?)
 
 
 #define BG_CHR_BASE		0x06000000
@@ -948,8 +949,8 @@ void PPU_Write8(u32 addr, u8 val)
 			iprintf("21%02X = %02X\n", addr, val);
 			break;
 			
-		case 0x40: IPC->SPC_IOPorts[0] = val; break;
-		case 0x41: IPC->SPC_IOPorts[1] = val; break;
+		case 0x40: iprintf("2140=%02X\n", val); IPC->SPC_IOPorts[0] = val; break;
+		case 0x41: iprintf("2141=%02X\n", val); IPC->SPC_IOPorts[1] = val; break;
 		case 0x42: IPC->SPC_IOPorts[2] = val; break;
 		case 0x43: IPC->SPC_IOPorts[3] = val; break;
 				
@@ -974,7 +975,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
-		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
+		case 0x42: iprintf("2142=%04X\n", val); *(u16*)&IPC->SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

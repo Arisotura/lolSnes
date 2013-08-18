@@ -1659,21 +1659,25 @@ OP_CLV:
 @ --- CMP ---------------------------------------------------------------------
 
 .macro CMP_8
-	and r1, snesA, #0xFF
-	cmp r1, r0
+	and r3, snesA, #0xFF
+	subs r3, r3, r0
 	bic snesP, snesP, #flagNZC
+	orrpl snesP, snesP, #flagC
+	tst r3, #0x80
+	orrne snesP, snesP, #flagN
+	ands r3, r3, #0xFF
 	orreq snesP, snesP, #flagZ
-	orrge snesP, snesP, #flagC
-	orrlt snesP, snesP, #flagN
 	b op_return
 .endm
 	
 .macro CMP_16
-	cmp snesA, r0
+	subs r3, snesA, r0
 	bic snesP, snesP, #flagNZC
+	orrpl snesP, snesP, #flagC
+	tst r3, #0x8000
+	orrne snesP, snesP, #flagN
+	movs r3, r3, lsl #0x10
 	orreq snesP, snesP, #flagZ
-	orrge snesP, snesP, #flagC
-	orrlt snesP, snesP, #flagN
 	b op_return
 .endm
 
@@ -1837,74 +1841,100 @@ OP_e1_COP:
 .ltorg
 
 @ --- CPX ---------------------------------------------------------------------
-	
-.macro CPX
-	cmp snesX, r0
+
+.macro CPX_8
+	subs r3, snesX, r0
 	bic snesP, snesP, #flagNZC
+	orrpl snesP, snesP, #flagC
+	tst r3, #0x80
+	orrne snesP, snesP, #flagN
+	ands r3, r3, #0xFF
 	orreq snesP, snesP, #flagZ
-	orrge snesP, snesP, #flagC
-	orrlt snesP, snesP, #flagN
+	b op_return
+.endm
+	
+.macro CPX_16
+	subs r3, snesX, r0
+	bic snesP, snesP, #flagNZC
+	orrpl snesP, snesP, #flagC
+	tst r3, #0x8000
+	orrne snesP, snesP, #flagN
+	movs r3, r3, lsl #0x10
+	orreq snesP, snesP, #flagZ
 	b op_return
 .endm
 
 OP_x0_CPX_Imm:
 	GetOp_Imm 16
-	CPX
+	CPX_16
 	
 OP_x1_CPX_Imm:
 	GetOp_Imm 8
-	CPX
+	CPX_8
 	
 OP_x0_CPX_Abs:
 	GetOp_Abs 16
-	CPX
+	CPX_16
 	
 OP_x1_CPX_Abs:
 	GetOp_Abs 8
-	CPX
+	CPX_8
 	
 OP_x0_CPX_DP:
 	GetOp_DP 16
-	CPX
+	CPX_16
 	
 OP_x1_CPX_DP:
 	GetOp_DP 8
-	CPX
+	CPX_8
 
 @ --- CPY ---------------------------------------------------------------------
 	
-.macro CPY
-	cmp snesY, r0
+.macro CPY_8
+	subs r3, snesY, r0
 	bic snesP, snesP, #flagNZC
+	orrpl snesP, snesP, #flagC
+	tst r3, #0x80
+	orrne snesP, snesP, #flagN
+	ands r3, r3, #0xFF
 	orreq snesP, snesP, #flagZ
-	orrge snesP, snesP, #flagC
-	orrlt snesP, snesP, #flagN
+	b op_return
+.endm
+	
+.macro CPY_16
+	subs r3, snesY, r0
+	bic snesP, snesP, #flagNZC
+	orrpl snesP, snesP, #flagC
+	tst r3, #0x8000
+	orrne snesP, snesP, #flagN
+	movs r3, r3, lsl #0x10
+	orreq snesP, snesP, #flagZ
 	b op_return
 .endm
 
 OP_x0_CPY_Imm:
 	GetOp_Imm 16
-	CPY
+	CPY_16
 	
 OP_x1_CPY_Imm:
 	GetOp_Imm 8
-	CPY
+	CPY_8
 	
 OP_x0_CPY_Abs:
 	GetOp_Abs 16
-	CPY
+	CPY_16
 	
 OP_x1_CPY_Abs:
 	GetOp_Abs 8
-	CPY
+	CPY_8
 	
 OP_x0_CPY_DP:
 	GetOp_DP 16
-	CPY
+	CPY_16
 	
 OP_x1_CPY_DP:
 	GetOp_DP 8
-	CPY
+	CPY_8
 	
 @ --- DEC ---------------------------------------------------------------------
 

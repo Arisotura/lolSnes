@@ -1022,11 +1022,13 @@ OP_CLRV:
 @ --- CMP ---------------------------------------------------------------------
 
 .macro DO_CMP a, b
-	cmp \a, \b
+	subs r12, \a, \b
 	bic spcPSW, spcPSW, #flagNZC
+	orrpl spcPSW, spcPSW, #flagC
+	tst r12, #0xFF
 	orreq spcPSW, spcPSW, #flagZ
-	orrge spcPSW, spcPSW, #flagC
-	orrlt spcPSW, spcPSW, #flagN
+	tst r12, #0x80
+	orrne spcPSW, spcPSW, #flagN
 .endm
 
 OP_CMP_A_Imm:

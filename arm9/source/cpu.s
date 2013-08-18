@@ -692,39 +692,17 @@ notwaiting:
 			add snesCycles, snesCycles, r0
 			
 emuloop:
-				@stmdb sp!, {snesCycles}
-				
 				OpcodePrefetch8
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
-				@ldmia sp!, {r3}
-				
-				@ldr r0, =CPU_Cycles
-				@ldr r1, [r0]
-				@sub r3, r3, snesCycles
-				@subs r1, r1, r3, asr #0x10
-				@strpl r1, [r0]
-				@bpl skip_spc700
-				
-				@ldr r3, =0x29F
-				@add r1, r1, r3
-				@str r1, [r0]
-				@bl Sync_RunSPC
-				@ldr r3, =0x04000180
-				@mov r0, #0x6100
-				@strh r0, [r3]
-				
-				@mov r0, #1
-				@mov r1, #0x00010000
-				@swi #0x40000
 				
 				@ leaving this in keeps SPC transfers from breaking
 				@ wtf?
 				@ a fix would be welcome.
-				ldr r0, =0x04000130
-				ldrh r0, [r0]
-				tst r0, #1
+				@ldr r0, =0x04000130
+				@ldrh r0, [r0]
+				@tst r0, #1
 				@bleq printvar
 
 skip_spc700:
@@ -3556,6 +3534,7 @@ OP_RTL:
 OP_RTS:
 	StackRead16
 	add r0, r0, #1
+	@bl printstuff
 	SetPC
 	AddCycles 3
 	b op_return
@@ -4395,15 +4374,12 @@ hax_branch:
 	add snesPC, snesPC, r0, lsl #0x10
 	b emulate_hardware
 	
-hax_nobranch:
-	add snesPC, snesPC, #0x10000
-	b emulate_hardware
-	
 
 OP_HAX42:
 	mov snesCycles, snesCycles, lsl #0x10
 	mov snesCycles, snesCycles, lsr #0x10
 	ldrb r0, [r2, #1]
+	add snesPC, snesPC, #0x10000
 	and r1, r0, #0xE0
 	and r0, r0, #0x0F
 	sub r0, r0, #0x10
@@ -4411,33 +4387,32 @@ OP_HAX42:
 	nop
 	tst snesP, #flagN
 	beq hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagN
 	bne hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagV
 	beq hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagV
 	bne hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagC
 	beq hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagC
 	bne hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagZ
 	beq hax_branch
-	b hax_nobranch
+	b emulate_hardware
 	nop
 	tst snesP, #flagZ
 	bne hax_branch
-	b hax_nobranch
-	nop
+	b emulate_hardware

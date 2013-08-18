@@ -71,3 +71,10 @@ void printvar()
 	iprintf("printvar %04X\n", IPC->_debug);
 	asm("ldmia sp!, {r12}");
 }
+
+void printstuff(u32 foo, u32 bar, u32 blarg)
+{
+	asm("stmdb sp!, {r0-r3, r12}");
+	iprintf("printstuff %08X %08X %08X\n", foo, bar, blarg);
+	asm("ldmia sp!, {r0-r3, r12}");
+}

@@ -30,6 +30,7 @@ u16 PPU_VRAMAddr = 0;
 u16 PPU_VRAMVal = 0;
 u8 PPU_VRAMInc = 0;
 u8 PPU_VRAMStep = 0;
+u16 PPU_VRAMPref = 0;
 
 u8 PPU_OAM[0x220];
 u16 PPU_OAMAddr = 0;
@@ -130,6 +131,7 @@ void PPU_Reset()
 	
 	PPU_VRAMAddr = 0;
 	PPU_VRAMVal = 0;
+	PPU_VRAMPref = 0;
 	
 	PPU_OAMAddr = 0;
 	PPU_OAMVal = 0;
@@ -766,13 +768,30 @@ u8 PPU_Read8(u32 addr)
 			break;
 		
 		case 0x22:
-		{
-			u8 val = *(u8*)(0x05000000 + (PPU_CGRAMAddr << 1) + PPU_CGRFlag);
-			if (PPU_CGRFlag) PPU_CGRAMAddr++;
-			PPU_CGRFlag = !PPU_CGRFlag;
-			ret = val;
-		}
-		break;
+			{
+				u8 val = *(u8*)(0x05000000 + (PPU_CGRAMAddr << 1) + PPU_CGRFlag);
+				if (PPU_CGRFlag) PPU_CGRAMAddr++;
+				PPU_CGRFlag = !PPU_CGRFlag;
+				ret = val;
+			}
+			break;
+		
+		case 0x39:
+			{
+				addr = (PPU_VRAMAddr << 1) & 0xFFFEFFFF;
+				ret = PPU_VRAM[addr];
+				if (!(PPU_VRAMInc & 0x80))
+					PPU_VRAMAddr += PPU_VRAMStep;
+			}
+			break;
+		case 0x3A:
+			{
+				addr = (PPU_VRAMAddr << 1) & 0xFFFEFFFF;
+				ret = PPU_VRAM[addr + 1];
+				if (PPU_VRAMInc & 0x80)
+					PPU_VRAMAddr += PPU_VRAMStep;
+			}
+			break;
 		
 		case 0x40: ret = IPC->SPC_IOPorts[4]; break;
 		case 0x41: ret = IPC->SPC_IOPorts[5]; break;
@@ -796,18 +815,27 @@ u16 PPU_Read16(u32 addr)
 		
 		case 0x40: ret = *(u16*)&IPC->SPC_IOPorts[4]; break;
 		case 0x42: ret = *(u16*)&IPC->SPC_IOPorts[6]; break;
+		
+		default:
+			ret = PPU_Read8(addr);
+			ret |= (PPU_Read8(addr+1) << 8);
+			break;
 	}
 	
 	asm("ldmia sp!, {r2-r3, r12}");
 	return ret;
 }
-int lolz=0; u16 warp=0;
+int lol=0;
 void PPU_Write8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r2-r3, r12}");
 	
 	switch (addr)
 	{
+		case 0x00:
+			//if (val == 0x80) {lol++; iprintf("2100=80\n"); if (lol>10) for(;;);}
+			break;
+			
 		case 0x01:
 			{
 				PPU_OBJSize = val >> 5;
@@ -895,10 +923,12 @@ void PPU_Write8(u32 addr, u8 val)
 		case 0x16:
 			PPU_VRAMAddr &= 0xFF00;
 			PPU_VRAMAddr |= val;
+			PPU_VRAMPref = *(u16*)&PPU_VRAM[(PPU_VRAMAddr << 1) & 0xFFFEFFFF];
 			break;
 		case 0x17:
 			PPU_VRAMAddr &= 0x00FF;
 			PPU_VRAMAddr |= (u16)val << 8;
+			PPU_VRAMPref = *(u16*)&PPU_VRAM[(PPU_VRAMAddr << 1) & 0xFFFEFFFF];
 			break;
 		
 		case 0x18: // VRAM shit
@@ -983,7 +1013,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
-		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
+		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; iprintf("2142: %04X\n", val); break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

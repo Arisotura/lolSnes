@@ -8,11 +8,21 @@
 
 #include "cpu.h"
 #include "memory.h"
+#include "ppu.h"
+
+
+void vblank()
+{
+	PPU_VBlank();
+}
 
 
 int main(void)
 {
 	defaultExceptionHandler();
+	
+	irqEnable(IRQ_VBLANK);
+	irqSet(IRQ_VBLANK, vblank);
 	
 	//vramSetBankA(VRAM_A_LCD);
 	videoSetMode(MODE_0_2D);

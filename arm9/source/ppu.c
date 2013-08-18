@@ -23,6 +23,7 @@ u16 PPU_YOffset = 16;
 u8 PPU_CGRAMAddr = 0;
 u16 PPU_CurColor = 0xFFFF;
 u8 PPU_CGRFlag = 0;
+u8 PPU_CGRDirty = 0;
 
 u8 PPU_VRAM[0x10000];
 u16 PPU_VRAMAddr = 0;
@@ -122,6 +123,7 @@ void PPU_Reset()
 	PPU_CGRAMAddr = 0;
 	PPU_CurColor = 0xFFFF;
 	PPU_CGRFlag = 0;
+	PPU_CGRDirty = 0;
 	
 	for (i = 0; i < 0x400; i += 4)
 		*(u32*)(0x05000000 + i) = 0;
@@ -188,14 +190,17 @@ void PPU_Reset()
 }
 
 
-void PPU_UploadBGPal(int nbg)
+void PPU_UploadBGPal(int nbg, bool domap)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
 	
-	if (nbg < 2)
-		*(u8*)0x04000245 = 0x80;
-	else
-		*(u8*)0x04000246 = 0x80;
+	if (domap)
+	{
+		if (nbg < 2)
+			*(u8*)0x04000245 = 0x80;
+		else
+			*(u8*)0x04000246 = 0x80;
+	}
 	
 	u16* src = (u16*)0x05000000;
 	u16* dst = (u16*)(BG_PAL_BASE + (nbg << 13));
@@ -243,10 +248,13 @@ void PPU_UploadBGPal(int nbg)
 		// TODO
 	}
 	
-	if (nbg < 2)
-		*(u8*)0x04000245 = 0x84;
-	else
-		*(u8*)0x04000246 = 0x8C;
+	if (domap)
+	{
+		if (nbg < 2)
+			*(u8*)0x04000245 = 0x84;
+		else
+			*(u8*)0x04000246 = 0x8C;
+	}
 }
 
 void PPU_UploadBGChr(int nbg)
@@ -411,7 +419,7 @@ inline void PPU_SetBGColorDepth(int nbg, int depth)
 			for (i = 0; i < size; i++)
 				PPU_VRAMMap[(bg->ChrBase >> 10) + i].ChrUsage |= bmask;
 			
-			PPU_UploadBGPal(nbg);
+			PPU_UploadBGPal(nbg, true);
 			PPU_UploadBGChr(nbg);
 			// no need to update scr since it's independent from color depth
 		}
@@ -455,7 +463,7 @@ inline void PPU_SetXScroll(int nbg, u8 val)
 	else
 	{
 		bg->ScrollX &= 0xFF;
-		bg->ScrollX |= (val & 0x1F);
+		bg->ScrollX |= ((val & 0x1F) << 8);
 		*(u16*)(0x04000010 + (nbg<<2)) = bg->ScrollX;
 	}
 }
@@ -469,7 +477,7 @@ inline void PPU_SetYScroll(int nbg, u8 val)
 	else
 	{
 		bg->ScrollY &= 0xFF;
-		bg->ScrollY |= (val & 0x1F);
+		bg->ScrollY |= ((val & 0x1F) << 8);
 		*(u16*)(0x04000012 + (nbg<<2)) = bg->ScrollY + PPU_YOffset;
 	}
 }
@@ -935,8 +943,8 @@ void PPU_Write8(u32 addr, u8 val)
 				register u16 paddr = PPU_CGRAMAddr << 1;
 				*(u16*)(0x05000000 + paddr) = PPU_CurColor;
 				*(u16*)(0x05000200 + paddr) = PPU_CurColor;
-				// TODO propagate palette changes to ext palettes
 				PPU_CGRAMAddr++;
+				PPU_CGRDirty = 1;
 			}
 			PPU_CGRFlag = !PPU_CGRFlag;
 			break;
@@ -949,8 +957,8 @@ void PPU_Write8(u32 addr, u8 val)
 			iprintf("21%02X = %02X\n", addr, val);
 			break;
 			
-		case 0x40: iprintf("2140=%02X\n", val); IPC->SPC_IOPorts[0] = val; break;
-		case 0x41: iprintf("2141=%02X\n", val); IPC->SPC_IOPorts[1] = val; break;
+		case 0x40: IPC->SPC_IOPorts[0] = val; break;
+		case 0x41: IPC->SPC_IOPorts[1] = val; break;
 		case 0x42: IPC->SPC_IOPorts[2] = val; break;
 		case 0x43: IPC->SPC_IOPorts[3] = val; break;
 				
@@ -975,7 +983,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
-		case 0x42: iprintf("2142=%04X\n", val); *(u16*)&IPC->SPC_IOPorts[2] = val; break;
+		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;
@@ -988,4 +996,24 @@ void PPU_Write16(u32 addr, u16 val)
 	}
 	
 	asm("ldmia sp!, {r2-r3, r12}");
+}
+
+
+void PPU_VBlank()
+{
+	if (PPU_CGRDirty)
+	{
+		PPU_CGRDirty = 0;
+		
+		*(u8*)0x04000245 = 0x80;
+		*(u8*)0x04000246 = 0x80;
+		
+		PPU_UploadBGPal(0, false);
+		PPU_UploadBGPal(1, false);
+		PPU_UploadBGPal(2, false);
+		PPU_UploadBGPal(3, false);
+			
+		*(u8*)0x04000245 = 0x84;
+		*(u8*)0x04000246 = 0x8C;
+	}
 }

@@ -4,4 +4,6 @@
 
 void PPU_Reset();
 
+void PPU_VBlank();
+
 #endif

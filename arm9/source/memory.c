@@ -60,6 +60,11 @@ IPCStruct* IPC;
 u8 Mem_HVBJOY = 0x00;
 u16 Mem_VMatch = 0;
 
+u8 Mem_MulA = 0;
+u16 Mem_MulRes = 0;
+u16 Mem_DivA = 0;
+u16 Mem_DivRes = 0;
+
 
 bool ROM_CheckHeader(u32 offset)
 {
@@ -448,6 +453,11 @@ void Mem_Reset()
 	
 	Mem_HVBJOY = 0x00;
 	
+	Mem_MulA = 0;
+	Mem_MulRes = 0;
+	Mem_DivA = 0;
+	Mem_DivRes = 0;
+	
 	PPU_Reset();
 }
 
@@ -569,6 +579,20 @@ u8 Mem_GIORead8(u32 addr)
 			ret = Mem_HVBJOY;
 			break;
 			
+		case 0x14:
+			ret = Mem_DivRes & 0xFF;
+			break;
+		case 0x15:
+			ret = Mem_DivRes >> 8;
+			break;
+			
+		case 0x16:
+			ret = Mem_MulRes & 0xFF;
+			break;
+		case 0x17:
+			ret = Mem_MulRes >> 8;
+			break;
+			
 		case 0x18:
 			ret = IO_ReadKeysLow();
 			break;
@@ -588,6 +612,14 @@ u16 Mem_GIORead16(u32 addr)
 	u16 ret = 0;
 	switch (addr)
 	{
+		case 0x14:
+			ret = Mem_DivRes;
+			break;
+			
+		case 0x16:
+			ret = Mem_MulRes;
+			break;
+			
 		case 0x18:
 			ret = IO_ReadKeysLow() | (IO_ReadKeysHigh() << 8);
 			break;
@@ -605,6 +637,33 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 	{
 		case 0x00:
 			if (val & 0x10) iprintf("HCOUNT IRQ ENABLE: %02X\n", val);
+			break;
+			
+		case 0x02:
+			Mem_MulA = val;
+			break;
+		case 0x03:
+			Mem_MulRes = (u16)Mem_MulA * (u16)val;
+			Mem_DivRes = (u16)val;
+			break;
+			
+		case 0x04:
+			Mem_DivA = (Mem_DivA & 0xFF00) | val;
+			break;
+		case 0x05:
+			Mem_DivA = (Mem_DivA & 0x00FF) | (val << 8);
+			break;
+		case 0x06:
+			*(u16*)0x04000280 = 0;
+			*(u32*)0x04000290 = (u32)Mem_DivA;
+			*(u32*)0x04000298 = (u32)val;
+			for (;;)
+			{
+				u16 divcnt = *(volatile u16*)0x04000280;
+				if (!(divcnt & 0x8000)) break;
+			}
+			Mem_DivRes = *(volatile u16*)0x040002A0;
+			Mem_MulRes = *(volatile u16*)0x040002A8;
 			break;
 			
 		case 0x09:

@@ -88,6 +88,8 @@ PPU_Background PPU_BG[4];
 
 u8 PPU_Mode;
 
+u8 PPU_BGMain, PPU_BGSub;
+
 u8 PPU_OBJSize;
 u16 PPU_OBJBase;
 u16 PPU_OBJGap;
@@ -164,6 +166,9 @@ void PPU_Reset()
 	
 	PPU_Mode = 0;
 	
+	PPU_BGMain = 0;
+	PPU_BGSub = 0;
+	
 	
 	PPU_OBJSize = 0;
 	PPU_OBJBase = 0;
@@ -180,7 +185,7 @@ void PPU_Reset()
 	*(u8*)0x04000246 = 0x8C;
 	
 	// setup BGs
-	*(u32*)0x04000000 = 0x40010F00 | (4 << 27);
+	*(u32*)0x04000000 = 0x40010000 | (4 << 27);
 	*(u16*)0x04000008 = 0x0080 | (0 << 4) | (0 << 10);
 	*(u16*)0x0400000A = 0x0081 | (1 << 4) | (1 << 10);
 	*(u16*)0x0400000C = 0x0082 | (2 << 4) | (2 << 10);
@@ -1005,11 +1010,15 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 		
 		case 0x2C:
+			PPU_BGMain = val & 0x1F;
 			*(u32*)0x04000000 &= 0xFFFFE0FF;
-			*(u32*)0x04000000 |= ((val & 0x1F) << 8);
+			*(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
 			break;
 		case 0x2D:
-			iprintf("21%02X = %02X\n", addr, val);
+			// TODO subscreen handling for funky hires modes
+			PPU_BGSub = val & 0x1F;
+			*(u32*)0x04000000 &= 0xFFFFE0FF;
+			*(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
 			break;
 			
 		case 0x40: IPC->SPC_IOPorts[0] = val; break;

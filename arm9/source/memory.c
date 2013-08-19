@@ -58,6 +58,7 @@ IPCStruct _IPC = {0};
 IPCStruct* IPC;
 
 u8 Mem_HVBJOY = 0x00;
+u16 Mem_VMatch = 0;
 
 
 bool ROM_CheckHeader(u32 offset)
@@ -603,6 +604,16 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 	switch (addr)
 	{
 		case 0x00:
+			if (val & 0x10) iprintf("HCOUNT IRQ ENABLE: %02X\n", val);
+			break;
+			
+		case 0x09:
+			Mem_VMatch &= 0xFF00;
+			Mem_VMatch |= val;
+			break;
+		case 0x0A:
+			Mem_VMatch &= 0x00FF;
+			Mem_VMatch |= (val << 8);
 			break;
 			
 		case 0x0B:
@@ -617,7 +628,12 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 {
 	asm("stmdb sp!, {r12}");
 	
-	iprintf("write16 @ $42%02X : %04x\n", addr, val);
+	switch (addr)
+	{
+		case 0x09:
+			Mem_VMatch = val;
+			break;
+	}
 	
 	asm("ldmia sp!, {r12}");
 }

@@ -28,7 +28,8 @@ memoryMap		.req r4		@ pointer to the memory map table
 .equ flagN, 0x80
 .equ flagE, 0x100	@ not actually in P, but hey, we have to keep it somewhere
 .equ flagW, 0x200	@ not even an actual flag... set by WAI
-.equ flagI2, 0x400	@ not an actual flag either, set when NMIs are disabled
+.equ flagI2, 0x400	@ set when NMIs are disabled
+.equ flagIV, 0x800  @ set when VCount IRQ is disabled
 
 .equ flagNVZC, 0xC3
 .equ flagNZ,   0x82

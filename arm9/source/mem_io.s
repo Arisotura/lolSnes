@@ -64,6 +64,9 @@ Mem_IOWrite8:
 	tst r1, #0x80
 	bicne snesP, snesP, #flagI2
 	orreq snesP, snesP, #flagI2
+	tst r1, #0x20
+	bicne snesP, snesP, #flagIV
+	orreq snesP, snesP, #flagIV
 	b Mem_GIOWrite8
 	
 Mem_IOWrite16:
@@ -83,4 +86,7 @@ Mem_IOWrite16:
 	tst r1, #0x80
 	bicne snesP, snesP, #flagI2
 	orreq snesP, snesP, #flagI2
+	tst r1, #0x20
+	bicne snesP, snesP, #flagIV
+	orreq snesP, snesP, #flagIV
 	b Mem_GIOWrite16

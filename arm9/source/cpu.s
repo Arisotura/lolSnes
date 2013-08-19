@@ -567,7 +567,7 @@ CPU_Reset:
 	mov snesY, #0
 	ldr snesS, =0x01FF0000	@ also PBR
 	mov snesD, #0			@ also DBR
-	ldr snesP, =0x00000534	@ we'll do PC later
+	ldr snesP, =0x00000D34	@ we'll do PC later
 	
 	ldr memoryMap, =Mem_PtrTable
 	SetOpcodeTable
@@ -588,8 +588,6 @@ CPU_Reset:
 	bx lr
 	
 CPU_TriggerIRQ:
-	tst snesP, #flagI
-	bxne lr
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	mov r2, snesS, lsl #0x3
@@ -681,16 +679,24 @@ frameloop:
 		b emuloop
 		
 newline:
-			@ if in wait mode, jump right to the next VBlank
-			@ TODO IRQ support
+			@ if in wait mode, jump right to the next line
 			tst snesP, #flagW
-			beq notwaiting
-			add snesCycles, snesCycles, #0x00000001
-			b emulate_hardware
-			
-notwaiting:
-			ldr r0, =0x05540001
+			movne r0, #0x00000001
+			ldreq r0, =0x05540001
 			add snesCycles, snesCycles, r0
+			
+			ldr r0, =(flagI|flagIV)
+			tst snesP, r0
+			bne no_virq
+			ldr r0, =Mem_VMatch
+			ldrh r0, [r0]
+			sub r0, r0, snesCycles
+			movs r0, r0, lsl #0x10
+			bleq CPU_TriggerIRQ
+			
+no_virq:
+			tst snesP, #flagW
+			bne emulate_hardware
 			
 emuloop:
 				OpcodePrefetch8
@@ -700,18 +706,12 @@ op_return:
 				
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start
+				@ (who cares if the HBlank end is one pixel off)
 				cmp snesCycles, #0x10C0000
-				ble Hblank
-				cmp snesCycles, #0x5500000
-				ldrle r0, =Mem_HVBJOY
-				ldrleb r1, [r0]
-				bicle r1, r1, #0x40
-				ble HblankEnd
-Hblank:
 				ldr r0, =Mem_HVBJOY
 				ldrb r1, [r0]
-				orr r1, r1, #0x40
-HblankEnd:
+				orrle r1, r1, #0x40
+				bicgt r1, r1, #0x40
 				strb r1, [r0]
 				
 				cmp snesCycles, #0x00010000

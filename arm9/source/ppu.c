@@ -37,14 +37,14 @@ u16 PPU_OAMAddr = 0;
 u16 PPU_OAMVal = 0;
 
 // VRAM mapping table
-// each entry applies to 1K of SNES VRAM
+// each entry applies to 2K of SNES VRAM
 typedef struct
 {
 	u16 ChrUsage;		// bit0-3 -> BG0-BG3, bit4 -> OBJ
 	u16 ScrUsage;		// same
 	
 } PPU_VRAMBlock;
-PPU_VRAMBlock PPU_VRAMMap[64];
+PPU_VRAMBlock PPU_VRAMMap[32];
 
 // 1024 tiles -> 16K SNES / 64K DS
 // 1 BG -> 2 to 8 scr blocks
@@ -136,17 +136,16 @@ void PPU_Reset()
 	PPU_OAMAddr = 0;
 	PPU_OAMVal = 0;
 	
-	for (i = 0; i < 64; i++)
+	for (i = 0; i < 32; i++)
 	{
 		PPU_VRAMMap[i].ChrUsage = 0;
 		PPU_VRAMMap[i].ScrUsage = 0;
 	}
-	for (i = 0; i < 8; i++)
+	/*for (i = 0; i < 4; i++)
 		PPU_VRAMMap[i].ChrUsage = 0x1F;
-	for (i = 8; i < 16; i++)
+	for (i = 8; i < 8; i++)
 		PPU_VRAMMap[i].ChrUsage = 0x0F;
-	PPU_VRAMMap[0].ScrUsage = 0x1F;
-	PPU_VRAMMap[1].ScrUsage = 0x1F;
+	PPU_VRAMMap[0].ScrUsage = 0x1F;*/
 	
 	for (i = 0; i < 0x10000; i += 4)
 		*(u32*)&PPU_VRAM[i] = 0;
@@ -183,12 +182,12 @@ void PPU_Reset()
 	// setup BGs
 	*(u32*)0x04000000 = 0x40010F00 | (4 << 27);
 	*(u16*)0x04000008 = 0x0080 | (0 << 4) | (0 << 10);
-	*(u16*)0x0400000A = 0x0080 | (1 << 4) | (1 << 10);
-	*(u16*)0x0400000C = 0x0080 | (2 << 4) | (2 << 10);
-	*(u16*)0x0400000E = 0x0080 | (3 << 4) | (3 << 10);
+	*(u16*)0x0400000A = 0x0081 | (1 << 4) | (1 << 10);
+	*(u16*)0x0400000C = 0x0082 | (2 << 4) | (2 << 10);
+	*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
 	
 	
-	printf("vram = %08X\n", (u32)&PPU_VRAM);
+	printf("vram = %08X | %08X\n", (u32)&PPU_VRAM, (u32)&PPU_VRAMMap);
 }
 
 
@@ -403,13 +402,15 @@ inline void PPU_SetBGColorDepth(int nbg, int depth)
 	
 	if (bg->ColorDepth != depth)
 	{
+		int olddepth = bg->ColorDepth;
 		bg->ColorDepth = depth;
 		
 		if (depth != 0)
 		{
-			register int bmask = (1 << nbg);
+			register int bmask = (1 << nbg), nbmask = ~bmask;
 			int i, size;
 			
+			int oldsize = bg->ChrSize >> 11;
 			switch (depth)
 			{
 				case 4: bg->ChrSize = 0x4000; break;
@@ -417,13 +418,20 @@ inline void PPU_SetBGColorDepth(int nbg, int depth)
 				case 256: bg->ChrSize = 0x10000; break;
 			}
 			
-			size = bg->ChrSize >> 10;
-			for (i = 0; i < size; i++)
-				PPU_VRAMMap[(bg->ChrBase >> 10) + i].ChrUsage |= bmask;
+			size = bg->ChrSize >> 11;
+			if (size != oldsize)
+			{
+				for (i = 0; i < oldsize; i++)
+					if (((bg->ChrBase >> 11) + i) < 32)
+						PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage &= nbmask;
+				for (i = 0; i < size; i++)
+					if (((bg->ChrBase >> 11) + i) < 32)
+						PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage |= bmask;
+			}
 			
 			PPU_UploadBGPal(nbg, true);
 			PPU_UploadBGChr(nbg);
-			// no need to update scr since it's independent from color depth
+			if (olddepth == 0) PPU_UploadBGScr(nbg);
 		}
 		else
 			bg->ChrSize = 0;
@@ -437,7 +445,7 @@ void PPU_ModeChange(u8 newmode)
 	if (newmode == PPU_Mode) return;
 	PPU_Mode = newmode;
 	
-	for (i = 0; i < 64; i++)
+	for (i = 0; i < 32; i++)
 		PPU_VRAMMap[i].ChrUsage &= 0xF0;
 	
 	switch (newmode)
@@ -489,7 +497,7 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	int oldscrbase = bg->ScrBase;
-	int oldsize = bg->ScrSize >> 10;
+	int oldsize = bg->ScrSize >> 11;
 	
 	bg->ScrBase = (val & 0xFC) << 9;
 	bg->MapSize = val & 0x03;
@@ -501,20 +509,22 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 		case 0x03: bg->ScrSize = 8192; break;
 	}
 	
-	if (bg->ScrBase != oldscrbase)
+	if (bg->ScrBase != oldscrbase || (bg->ScrSize >> 11) != oldsize)
 	{
 		register int bmask = (1 << nbg), nbmask = ~bmask;
 		
-		int i, size = bg->ScrSize >> 10;
+		int i, size = bg->ScrSize >> 11;
 		for (i = 0; i < oldsize; i++)
-			PPU_VRAMMap[(oldscrbase >> 10) + i].ScrUsage &= nbmask;
+			if (((oldscrbase >> 11) + i) < 32)
+				PPU_VRAMMap[(oldscrbase >> 11) + i].ScrUsage &= nbmask;
 		for (i = 0; i < size; i++)
-			PPU_VRAMMap[(bg->ScrBase >> 10) + i].ScrUsage |= bmask;
+			if (((bg->ScrBase >> 11) + i) < 32)
+				PPU_VRAMMap[(bg->ScrBase >> 11) + i].ScrUsage |= bmask;
 		
 		PPU_UploadBGScr(nbg);
 	}
 	
-	u16* bgctrl = (u16*)(0x04000008 + (nbg << 2));
+	u16* bgctrl = (u16*)(0x04000008 + (nbg << 1));
 	*bgctrl = (*bgctrl & 0xFFFF3FFF) | ((val & 0x03) << 14);
 }
 
@@ -529,14 +539,14 @@ inline void PPU_SetBGCHR(int nbg, u8 val)
 	{
 		register int bmask = (1 << nbg), nbmask = ~bmask;
 		
-		int i, size = bg->ChrSize >> 10;
+		int i, size = bg->ChrSize >> 11;
 		for (i = 0; i < size; i++)
 		{
-			register int oldi = (oldchrbase >> 10) + i;
-			register int newi = (bg->ChrBase >> 10) + i;
+			register int oldi = (oldchrbase >> 11) + i;
+			register int newi = (bg->ChrBase >> 11) + i;
 			
-			if (oldi < 64) PPU_VRAMMap[oldi].ChrUsage &= nbmask;
-			if (newi < 64) PPU_VRAMMap[newi].ChrUsage |= bmask;
+			if (oldi < 32) PPU_VRAMMap[oldi].ChrUsage &= nbmask;
+			if (newi < 32) PPU_VRAMMap[newi].ChrUsage |= bmask;
 		}
 		
 		PPU_UploadBGChr(nbg);
@@ -548,19 +558,19 @@ inline void PPU_SetOBJCHR(u16 base, u16 gap)
 	if (base != PPU_OBJBase || gap != PPU_OBJGap)
 	{
 		int i;
-		for (i = 0; i < 0x10; i++)
+		for (i = 0; i < 0x8; i++)
 		{
-			register int oldi = (PPU_OBJBase >> 10) + i;
-			register int newi = (base >> 10) + i;
+			register int oldi = (PPU_OBJBase >> 11) + i;
+			register int newi = (base >> 11) + i;
 			
-			if (i >= 0x08)
+			if (i >= 0x4)
 			{
-				oldi += (PPU_OBJGap >> 10);
-				newi += (gap >> 10);
+				oldi += (PPU_OBJGap >> 11);
+				newi += (gap >> 11);
 			}
 			
-			if (oldi < 64) PPU_VRAMMap[oldi].ChrUsage &= 0xFFEF;
-			if (newi < 64) PPU_VRAMMap[newi].ChrUsage |= 0x0010;
+			if (oldi < 32) PPU_VRAMMap[oldi].ChrUsage &= 0xFFEF;
+			if (newi < 32) PPU_VRAMMap[newi].ChrUsage |= 0x0010;
 		}
 		
 		PPU_OBJBase = base;
@@ -685,7 +695,7 @@ inline void PPU_UpdateVRAM_OBJ(u32 addr, u16 val)
 
 inline void PPU_UpdateVRAM(u32 addr, u16 val)
 {
-	PPU_VRAMBlock* block = &PPU_VRAMMap[addr >> 10];
+	PPU_VRAMBlock* block = &PPU_VRAMMap[addr >> 11];
 	
 	if (block->ChrUsage & 0x0001) PPU_UpdateVRAM_CHR(0, addr, val);
 	if (block->ChrUsage & 0x0002) PPU_UpdateVRAM_CHR(1, addr, val);
@@ -716,7 +726,7 @@ void PPU_UpdateOAM(u16 addr, u16 val)
 					oam[1] = (oam[1] & 0xFFFFCFFF) | ((val & 0xC000) >> 2);
 					
 					// TODO prio
-					oam[2] = (oam[2] & 0xCE00) | ((val & 0x01F0) << 1) | (val & 0x000F) | ((val & 0x0E00) << 3) | 0x8000;
+					oam[2] = (oam[2] & 0x0C00) | ((val & 0x01F0) << 1) | (val & 0x000F) | ((val & 0x0E00) << 3) | 0x8000;
 					
 					// bit0-8: tile num
 					// bit9-11: pal
@@ -775,6 +785,11 @@ u8 PPU_Read8(u32 addr)
 				ret = val;
 			}
 			break;
+			
+		case 0x38:
+			ret = PPU_OAM[PPU_OAMAddr];
+			PPU_OAMAddr++;
+			break;
 		
 		case 0x39:
 			{
@@ -825,7 +840,7 @@ u16 PPU_Read16(u32 addr)
 	asm("ldmia sp!, {r2-r3, r12}");
 	return ret;
 }
-int lol=0;
+
 void PPU_Write8(u32 addr, u8 val)
 {
 	asm("stmdb sp!, {r2-r3, r12}");
@@ -833,7 +848,6 @@ void PPU_Write8(u32 addr, u8 val)
 	switch (addr)
 	{
 		case 0x00:
-			//if (val == 0x80) {lol++; iprintf("2100=80\n"); if (lol>10) for(;;);}
 			break;
 			
 		case 0x01:
@@ -848,18 +862,28 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x02:
-			PPU_OAMAddr = (PPU_OAMAddr & 0xFFFFFE01) | (val << 1);
+			PPU_OAMAddr = (PPU_OAMAddr & 0x200) | (val << 1);
 			break;
 		case 0x03:
-			PPU_OAMAddr = (PPU_OAMAddr & 0xFFFFFDFE) | ((val & 0x01) << 9);
+			PPU_OAMAddr = (PPU_OAMAddr & 0x1FE) | ((val & 0x01) << 9);
 			break;
 			
 		case 0x04:
-			if (PPU_OAMAddr & 0x1)
+			/*if (PPU_OAMAddr >= 0x200)
+			{
+				u16 addr = PPU_OAMAddr;
+				while (addr >= 0x220) addr -= 0x20;
+				
+				if (PPU_OAM[addr] != val)
+				{
+					PPU_OAM[addr] = val;
+					PPU_UpdateOAM(addr, *(u16*)&PPU_OAM[addr&0xFFFFFFFE]);
+				}
+			}
+			else*/ if (PPU_OAMAddr & 0x1)
 			{
 				PPU_OAMVal |= (val << 8);
 				u16 addr = PPU_OAMAddr - 1;
-				if (addr >= 0x220) addr -= 0x20;
 				
 				if (*(u16*)&PPU_OAM[addr] != PPU_OAMVal)
 				{
@@ -872,6 +896,7 @@ void PPU_Write8(u32 addr, u8 val)
 				PPU_OAMVal = val;
 			}
 			PPU_OAMAddr++;
+			PPU_OAMAddr &= 0x3FF;
 			break;
 			
 		case 0x05:

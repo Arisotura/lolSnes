@@ -16,6 +16,7 @@ extern u32 Mem_PtrTable[0x800] DTCM_BSS;
 extern u8 Mem_SysRAM[0x20000];
 
 extern u8 Mem_HVBJOY;
+extern u16 Mem_VMatch;
 
 
 void ROM_DoCacheBank(int bank, int type);

@@ -35,6 +35,9 @@ u16 PPU_VRAMPref = 0;
 u8 PPU_OAM[0x220];
 u16 PPU_OAMAddr = 0;
 u16 PPU_OAMVal = 0;
+u8 PPU_OAMPrio = 0;
+u8 PPU_FirstOAM = 0;
+u8 PPU_OAMDirty = 0;
 
 // VRAM mapping table
 // each entry applies to 2K of SNES VRAM
@@ -118,6 +121,29 @@ u8 _PPU_OBJSizes[16] =
 };
 u8* PPU_OBJSizes;
 
+/*u8 _PPU_OBJPrio[32] = 
+{
+	2, 0x82, 0, 0x80,
+	2, 0x82, 0, 0x80,
+	1, 0, 0x80, 0x80,
+	1, 0, 0, 0,
+	1, 0, 0, 0,
+	1, 0, 0, 0,
+	1, 0, 0, 0,
+	1, 0, 0, 0
+};
+u8* PPU_OBJPrio;*/
+
+u16 PPU_OBJList[4*128];
+
+u8 PPU_SpriteSize[16] =
+{
+	8, 16, 32, 64,
+	8, 8, 16, 32,
+	8, 16, 32, 64,
+	16, 32, 32, 64
+};
+
 
 void PPU_Reset()
 {
@@ -130,6 +156,8 @@ void PPU_Reset()
 	
 	for (i = 0; i < 0x400; i += 4)
 		*(u32*)(0x05000000 + i) = 0;
+	for (i = 0; i < 0x400; i += 4)
+		*(u32*)(0x07000000 + i) = 0;
 	
 	PPU_VRAMAddr = 0;
 	PPU_VRAMVal = 0;
@@ -137,6 +165,9 @@ void PPU_Reset()
 	
 	PPU_OAMAddr = 0;
 	PPU_OAMVal = 0;
+	PPU_OAMPrio = 0;
+	PPU_FirstOAM = 0;
+	PPU_OAMDirty = 0;
 	
 	for (i = 0; i < 32; i++)
 	{
@@ -174,6 +205,9 @@ void PPU_Reset()
 	PPU_OBJBase = 0;
 	PPU_OBJGap = 0;
 	PPU_OBJSizes = _PPU_OBJSizes;
+	
+	for (i = 0; i < 4*128; i++)
+		PPU_OBJList[i] = 0;
 		
 	
 	// allocate VRAM
@@ -718,11 +752,12 @@ void PPU_UpdateOAM(u16 addr, u16 val)
 {
 	if (addr < 0x200)
 	{
-		u16* oam = (u16*)(0x07000000 + ((addr & 0xFFFFFFFC) << 1));
+		//u16* oam = (u16*)(0x07000000 + ((addr & 0xFFFFFFFC) << 1));
+		u16* oam = &PPU_OBJList[addr & 0xFFFFFFFC];
 		switch (addr & 0x3)
 		{
 			case 0x0:	// X coord low, Y coord
-				oam[0] = (oam[0] & 0xC000) | (((val >> 8) - PPU_YOffset) & 0xFF);
+				oam[0] = (oam[0] & 0xC000) | (((val >> 8) - PPU_YOffset + 1) & 0xFF);
 				oam[1] = (oam[1] & 0xFF00) | (val & 0xFF);
 				break;
 				
@@ -744,11 +779,12 @@ void PPU_UpdateOAM(u16 addr, u16 val)
 	}
 	else
 	{
-		addr -= 0x200;
-		u16* oam = (u16*)(0x07000000 + (addr << 5));
+		addr &= 0x1F;
+		//u16* oam = (u16*)(0x07000000 + (addr << 5));
+		u16* oam = &PPU_OBJList[addr << 4];
 		
 		int i;
-		for (i = 0; i < 8; i++)
+		for (i = 0; i < 4; i++)
 		{
 			u16 oval = oam[1] & 0xFFFF3EFF;
 			if (val & 0x1) oval |= 0x0100;
@@ -871,21 +907,23 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 		case 0x03:
 			PPU_OAMAddr = (PPU_OAMAddr & 0x1FE) | ((val & 0x01) << 9);
+			PPU_OAMPrio = val & 0x80;
 			break;
 			
 		case 0x04:
-			/*if (PPU_OAMAddr >= 0x200)
+			if (PPU_OAMAddr >= 0x200)
 			{
 				u16 addr = PPU_OAMAddr;
-				while (addr >= 0x220) addr -= 0x20;
+				addr &= 0x21F;
 				
 				if (PPU_OAM[addr] != val)
 				{
 					PPU_OAM[addr] = val;
-					PPU_UpdateOAM(addr, *(u16*)&PPU_OAM[addr&0xFFFFFFFE]);
+					PPU_UpdateOAM(addr, val);
+					PPU_OAMDirty = 1;
 				}
 			}
-			else*/ if (PPU_OAMAddr & 0x1)
+			else if (PPU_OAMAddr & 0x1)
 			{
 				PPU_OAMVal |= (val << 8);
 				u16 addr = PPU_OAMAddr - 1;
@@ -894,6 +932,7 @@ void PPU_Write8(u32 addr, u8 val)
 				{
 					*(u16*)&PPU_OAM[addr] = PPU_OAMVal;
 					PPU_UpdateOAM(addr, PPU_OAMVal);
+					PPU_OAMDirty = 1;
 				}
 			}
 			else
@@ -1063,8 +1102,10 @@ void PPU_Write16(u32 addr, u16 val)
 }
 
 
-void PPU_VBlank()
+ITCM_CODE void PPU_VBlank()
 {
+	int i;
+	
 	if (PPU_CGRDirty)
 	{
 		PPU_CGRDirty = 0;
@@ -1079,5 +1120,54 @@ void PPU_VBlank()
 			
 		*(u8*)0x04000245 = 0x84;
 		*(u8*)0x04000246 = 0x8C;
+	}
+	
+	u8 firstoam = (PPU_OAMAddr & 0xFE) >> 1;
+	if (PPU_OAMDirty || firstoam != PPU_FirstOAM)
+	{
+		PPU_OAMDirty = 0;
+		PPU_FirstOAM = firstoam;
+		
+		register u32 srcaddr = firstoam << 2;
+		register u16* dst = (u16*)0x07000000;
+		register int nsprites = 0;
+		
+		// insert faketile OBJs here
+		
+		for (i = 0; i < 128; i++)
+		{
+			u16 attr0 = PPU_OBJList[srcaddr++];
+			u16 attr1 = PPU_OBJList[srcaddr++];
+			
+			u8 w = PPU_SpriteSize[(attr1 >> 14) | ((attr0 & 0x8000) >> 13)];
+			u8 h = PPU_SpriteSize[(attr1 >> 14) | ((attr0 & 0x8000) >> 13) | 0x8];
+			
+			// if the sprite is offscreen, don't deal with it
+			u16 y = attr0 & 0xFF;
+			u16 x = attr1 & 0x1FF;
+			if ((x > 0xFF && x <= (0x200 - w)) || (y > 0xBF && y <= (0x100 - h)))
+			{
+				srcaddr += 2;
+				srcaddr &= 0x1FF;
+				continue;
+			}
+			
+			*dst++ = attr0;
+			*dst++ = attr1;
+			*dst++ = PPU_OBJList[srcaddr++];
+			*dst++ = PPU_OBJList[srcaddr++];
+			
+			srcaddr &= 0x1FF;
+			nsprites++;
+		}
+		
+		// disable all the sprites we didn't use
+		for (i = nsprites; i < 128; i++)
+		{
+			*dst++ = 0x0200;
+			*dst++ = 0x0000;
+			*dst++ = 0x0000;
+			*dst++ = 0x0000;
+		}
 	}
 }

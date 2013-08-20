@@ -318,21 +318,25 @@ bool Mem_LoadROM(char* path)
 	{
 		ROM_BaseOffset = 0x200;
 		Mem_HiROM = false;
+		ROM_HeaderOffset = 0x81C0;
 	}
 	else if (ROM_CheckHeader(0x101C0)) // headered, HiROM
 	{
 		ROM_BaseOffset = 0x200;
 		Mem_HiROM = true;
+		ROM_HeaderOffset = 0x101C0;
 	}
 	else if (ROM_CheckHeader(0x7FC0) || ROM_FileSize == 0x8000) // headerless, LoROM
 	{
 		ROM_BaseOffset = 0;
 		Mem_HiROM = false;
+		ROM_HeaderOffset = 0x7FC0;
 	}
 	else if (ROM_CheckHeader(0xFFC0)) // headerless, HiROM
 	{
 		ROM_BaseOffset = 0;
 		Mem_HiROM = true;
+		ROM_HeaderOffset = 0xFFC0;
 	}
 	else // whatever piece of shit
 	{
@@ -343,11 +347,13 @@ bool Mem_LoadROM(char* path)
 		// TODO use 0x7FC0 instead if no header
 		ROM_BaseOffset = 0x200;
 		Mem_HiROM = false;
+		ROM_HeaderOffset = 0x81C0;
 	}
 
 	fseek(ROM_File, ROM_HeaderOffset + 0x18, SEEK_SET);
 	u8 sramsize; fread(&sramsize, 1, 1, ROM_File);
 	Mem_SRAMMask = sramsize ? ((1024 << sramsize) - 1) : 0;
+	Mem_SRAMMask &= 0x000FFFFF;
 	
 	return true;
 }

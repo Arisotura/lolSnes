@@ -1122,7 +1122,7 @@ ITCM_CODE void PPU_VBlank()
 		*(u8*)0x04000246 = 0x8C;
 	}
 	
-	u8 firstoam = (PPU_OAMAddr & 0xFE) >> 1;
+	u8 firstoam = PPU_OAMPrio ? ((PPU_OAMAddr & 0xFE) >> 1) : 0;
 	if (PPU_OAMDirty || firstoam != PPU_FirstOAM)
 	{
 		PPU_OAMDirty = 0;

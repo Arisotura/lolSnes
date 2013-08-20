@@ -1,3 +1,21 @@
+/*
+    Copyright 2013 Mega-Mario
+
+    This file is part of lolSnes.
+
+    lolSnes is free software: you can redistribute it and/or modify it under
+    the terms of the GNU General Public License as published by the Free
+    Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    lolSnes is distributed in the hope that it will be useful, but WITHOUT ANY 
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS 
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along 
+    with lolSnes. If not, see http://www.gnu.org/licenses/.
+*/
+
 #include <nds.h>
 #include <stdio.h>
 
@@ -6,9 +24,6 @@
 // PPU
 //
 // TODO LIST:
-// * track individual palette modifications
-// * track BG CHR modifications
-// * everything regarding OBJ
 // * (take SPC stuff out of the PPU?)
 
 
@@ -92,6 +107,7 @@ PPU_Background PPU_BG[4];
 u8 PPU_Mode;
 
 u8 PPU_BGMain, PPU_BGSub;
+u16 PPU_MainBackdrop, PPU_SubBackdrop;
 
 u8 PPU_OBJSize;
 u16 PPU_OBJBase;
@@ -199,6 +215,8 @@ void PPU_Reset()
 	
 	PPU_BGMain = 0;
 	PPU_BGSub = 0;
+	PPU_MainBackdrop = 0;
+	PPU_SubBackdrop = 0;
 	
 	
 	PPU_OBJSize = 0;
@@ -1040,7 +1058,8 @@ void PPU_Write8(u32 addr, u8 val)
 			{
 				PPU_CurColor |= (val << 8);
 				register u16 paddr = PPU_CGRAMAddr << 1;
-				*(u16*)(0x05000000 + paddr) = PPU_CurColor;
+				if (paddr == 0) PPU_MainBackdrop = PPU_CurColor;
+				else *(u16*)(0x05000000 + paddr) = PPU_CurColor;
 				*(u16*)(0x05000200 + paddr) = PPU_CurColor;
 				PPU_CGRAMAddr++;
 				PPU_CGRDirty = 1;
@@ -1058,6 +1077,18 @@ void PPU_Write8(u32 addr, u8 val)
 			PPU_BGSub = val & 0x1F;
 			*(u32*)0x04000000 &= 0xFFFFE0FF;
 			*(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
+			break;
+			
+		case 0x32:
+			{
+				u8 intensity = val & 0x1F;
+				if (val & 0x20) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFFFFE0) | intensity;
+				if (val & 0x40) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFFFC1F) | (intensity << 5);
+				if (val & 0x80) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFF13FF) | (intensity << 10);
+				
+				// TODO do this better
+				*(u16*)0x05000000 = PPU_SubBackdrop ? PPU_SubBackdrop : PPU_MainBackdrop;
+			}
 			break;
 			
 		case 0x40: IPC->SPC_IOPorts[0] = val; break;

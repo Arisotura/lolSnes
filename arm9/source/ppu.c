@@ -89,6 +89,10 @@ PPU_VRAMBlock PPU_VRAMMap[32];
 // bank C: ARM7 VRAM
 // bank H: bottom screen
 
+// keeps track of blank tiles
+// 1 bit per 2 pixels
+//u32 PPU_TileUsage[4][1024];
+
 typedef struct
 {
 	u16 ChrBase;
@@ -105,6 +109,7 @@ typedef struct
 PPU_Background PPU_BG[4];
 
 u8 PPU_Mode;
+u8 PPU_BG3Prio;
 
 u8 PPU_BGMain, PPU_BGSub;
 u16 PPU_MainBackdrop, PPU_SubBackdrop;
@@ -136,19 +141,6 @@ u8 _PPU_OBJSizes[16] =
 	0x82, 2
 };
 u8* PPU_OBJSizes;
-
-/*u8 _PPU_OBJPrio[32] = 
-{
-	2, 0x82, 0, 0x80,
-	2, 0x82, 0, 0x80,
-	1, 0, 0x80, 0x80,
-	1, 0, 0, 0,
-	1, 0, 0, 0,
-	1, 0, 0, 0,
-	1, 0, 0, 0,
-	1, 0, 0, 0
-};
-u8* PPU_OBJPrio;*/
 
 u16 PPU_OBJList[4*128];
 
@@ -196,6 +188,14 @@ void PPU_Reset()
 		PPU_VRAMMap[i].ChrUsage = 0x0F;
 	PPU_VRAMMap[0].ScrUsage = 0x1F;*/
 	
+	/*for (i = 0; i < 1024; i++)
+	{
+		PPU_TileUsage[0][i] = 0;
+		PPU_TileUsage[1][i] = 0;
+		PPU_TileUsage[2][i] = 0;
+		PPU_TileUsage[3][i] = 0;
+	}*/
+	
 	for (i = 0; i < 0x10000; i += 4)
 		*(u32*)&PPU_VRAM[i] = 0;
 		
@@ -212,6 +212,7 @@ void PPU_Reset()
 	
 	
 	PPU_Mode = 0;
+	PPU_BG3Prio = 0;
 	
 	PPU_BGMain = 0;
 	PPU_BGSub = 0;
@@ -332,6 +333,7 @@ void PPU_UploadBGChr(int nbg)
 		for (t = 0; t < 1024; t++)
 		{
 			int y;
+			//u32 usage = 0;
 			for (y = 0; y < 8; y++)
 			{
 				u8 	b1 = *bp12++,
@@ -345,7 +347,15 @@ void PPU_UploadBGChr(int nbg)
 						| ((b1 & 0x04) << 6) | ((b2 & 0x04) << 7);
 				*dst++ 	= ((b1 & 0x02) >> 1) | (b2 & 0x02)
 						| ((b1 & 0x01) << 8) | ((b2 & 0x01) << 9);
+						
+				/*if (*(dst-4)) usage |= 0x8;
+				if (*(dst-3)) usage |= 0x4;
+				if (*(dst-2)) usage |= 0x2;
+				if (*(dst-1)) usage |= 0x1;
+				usage <<= 4;*/
 			}
+			
+			//PPU_TileUsage[nbg][t] = usage;
 		}
 	}
 	else if (bg->ColorDepth == 16)
@@ -358,6 +368,7 @@ void PPU_UploadBGChr(int nbg)
 		for (t = 0; t < 1024; t++)
 		{
 			int y;
+			//u32 usage = 0;
 			for (y = 0; y < 8; y++)
 			{
 				u8 	b1 = *bp12++,
@@ -373,8 +384,15 @@ void PPU_UploadBGChr(int nbg)
 						| ((b1 & 0x04) << 6) | ((b2 & 0x04) << 7) | ((b3 & 0x04) << 8) | ((b4 & 0x04) << 9);
 				*dst++ 	= ((b1 & 0x02) >> 1) | (b2 & 0x02) | ((b3 & 0x02) << 1) | ((b4 & 0x02) << 2)
 						| ((b1 & 0x01) << 8) | ((b2 & 0x01) << 9) | ((b3 & 0x01) << 10) | ((b4 & 0x01) << 11);
+						
+				/*if (*(dst-4)) usage |= 0x8;
+				if (*(dst-3)) usage |= 0x4;
+				if (*(dst-2)) usage |= 0x2;
+				if (*(dst-1)) usage |= 0x1;
+				usage <<= 4;*/
 			}
 			
+			//PPU_TileUsage[nbg][t] = usage;
 			bp12 += 16;
 			bp34 += 16;
 		}
@@ -531,7 +549,7 @@ inline void PPU_SetXScroll(int nbg, u8 val)
 	{
 		bg->ScrollX &= 0xFF;
 		bg->ScrollX |= ((val & 0x1F) << 8);
-		*(u16*)(0x04000010 + (nbg<<2)) = bg->ScrollX;
+		//*(u16*)(0x04000010 + (nbg<<2)) = bg->ScrollX;
 	}
 }
 
@@ -545,7 +563,7 @@ inline void PPU_SetYScroll(int nbg, u8 val)
 	{
 		bg->ScrollY &= 0xFF;
 		bg->ScrollY |= ((val & 0x1F) << 8);
-		*(u16*)(0x04000012 + (nbg<<2)) = bg->ScrollY + PPU_YOffset;
+		//*(u16*)(0x04000012 + (nbg<<2)) = bg->ScrollY + PPU_YOffset;
 	}
 }
 
@@ -656,6 +674,14 @@ inline void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 								((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
 		*(u16*)(vramptr + 6) = ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | 
 								((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
+								
+		/*u32 usage = PPU_TileUsage[nbg][addr >> 4];
+		int shift = (addr & 0xE) << 1;
+		if (*(u16*)vramptr) usage |= 0x8;
+		if (*(u16*)(vramptr + 2)) usage |= 0x4;
+		if (*(u16*)(vramptr + 4)) usage |= 0x2;
+		if (*(u16*)(vramptr + 6)) usage |= 0x1;
+		PPU_TileUsage[nbg][addr >> 4] = (PPU_TileUsage*/
 	}
 	else if (bg->ColorDepth == 16)
 	{
@@ -783,8 +809,8 @@ void PPU_UpdateOAM(u16 addr, u16 val)
 				{
 					oam[1] = (oam[1] & 0xFFFFCFFF) | ((val & 0xC000) >> 2);
 					
-					// TODO prio
-					oam[2] = (oam[2] & 0x0C00) | ((val & 0x01F0) << 1) | (val & 0x000F) | ((val & 0x0E00) << 3) | 0x8000;
+					u16 prio = 0;// !(val & 0x1000) ? 0x0000 : 0x0800;
+					oam[2] = prio | ((val & 0x01F0) << 1) | (val & 0x000F) | ((val & 0x0E00) << 3) | 0x8000;
 					
 					// bit0-8: tile num
 					// bit9-11: pal
@@ -963,8 +989,21 @@ void PPU_Write8(u32 addr, u8 val)
 			
 		case 0x05:
 			if (val & 0xF0) iprintf("!! 16x16 TILES NOT SUPPORTED\n");
-			// TODO prio (bit 3)
 			PPU_ModeChange(val & 0x07);
+			
+			// if high prio is given to BG3 frontmost tiles, assume BG3 
+			// is used for game HUD, and move it forward
+			PPU_BG3Prio = ((val & 0x08) != 0) && (PPU_Mode == 1);
+			if (PPU_BG3Prio)
+			{
+				*(u32*)0x04000008 = (*(u32*)0x04000008 & 0xFFF0FFF0) | 0x00020001;
+				*(u32*)0x0400000C = (*(u32*)0x0400000C & 0xFFFFFFF0);
+			}
+			else
+			{
+				*(u32*)0x04000008 = (*(u32*)0x04000008 & 0xFFF0FFF0) | 0x00010000;
+				*(u32*)0x0400000C = (*(u32*)0x0400000C & 0xFFF0FFF0) | 0x00030002;
+			}
 			break;
 			
 			
@@ -1084,7 +1123,7 @@ void PPU_Write8(u32 addr, u8 val)
 				u8 intensity = val & 0x1F;
 				if (val & 0x20) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFFFFE0) | intensity;
 				if (val & 0x40) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFFFC1F) | (intensity << 5);
-				if (val & 0x80) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFF13FF) | (intensity << 10);
+				if (val & 0x80) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFF83FF) | (intensity << 10);
 				
 				// TODO do this better
 				*(u16*)0x05000000 = PPU_SubBackdrop ? PPU_SubBackdrop : PPU_MainBackdrop;
@@ -1201,4 +1240,14 @@ ITCM_CODE void PPU_VBlank()
 			*dst++ = 0x0000;
 		}
 	}
+	
+	// update BG scroll offsets
+	*(u16*)0x04000010 = PPU_BG[0].ScrollX;
+	*(u16*)0x04000012 = PPU_BG[0].ScrollY + PPU_YOffset;
+	*(u16*)0x04000014 = PPU_BG[1].ScrollX;
+	*(u16*)0x04000016 = PPU_BG[1].ScrollY + PPU_YOffset;
+	*(u16*)0x04000018 = PPU_BG[2].ScrollX;
+	*(u16*)0x0400001A = PPU_BG[2].ScrollY + PPU_YOffset;
+	*(u16*)0x0400001C = PPU_BG[3].ScrollX;
+	*(u16*)0x0400001E = PPU_BG[3].ScrollY + PPU_YOffset;
 }

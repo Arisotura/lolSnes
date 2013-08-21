@@ -146,6 +146,8 @@ CPU_Regs:
 		bl Mem_IOWrite8
 		b 2f
 1:
+		tst r3, #0x80000000
+		strne r3, [memoryMap, #-0x4]
 		bic r3, r3, #0xF0000000
 		mov r0, r0, lsl #0x13
 		strb r1, [r3, r0, lsr #0x13]
@@ -165,6 +167,8 @@ CPU_Regs:
 		bl Mem_IOWrite16
 		b 2f
 1:
+		tst r3, #0x80000000
+		strne r3, [memoryMap, #-0x4]
 		bic r3, r3, #0xF0000000
 		mov r0, r0, lsl #0x13
 		add r3, r3, r0, lsr #0x13
@@ -587,6 +591,7 @@ CPU_Reset:
 	ldr snesP, =0x00000D34	@ we'll do PC later
 	
 	ldr memoryMap, =Mem_PtrTable
+	ldr memoryMap, [memoryMap]
 	SetOpcodeTable
 	
 	ldr r0, =ROM_Bank0End

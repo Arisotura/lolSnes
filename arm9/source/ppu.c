@@ -108,6 +108,7 @@ typedef struct
 } PPU_Background;
 PPU_Background PPU_BG[4];
 
+u8 PPU_ForcedBlank;
 u8 PPU_Mode;
 u8 PPU_BG3Prio;
 
@@ -211,6 +212,7 @@ void PPU_Reset()
 	}
 	
 	
+	PPU_ForcedBlank = 0;
 	PPU_Mode = 0;
 	PPU_BG3Prio = 0;
 	
@@ -933,6 +935,9 @@ void PPU_Write8(u32 addr, u8 val)
 	switch (addr)
 	{
 		case 0x00:
+			if (val & 0x80) val = 0;
+			// TODO find an efficient way to emulate that
+			// MASTER_BRIGHT would be all good if it didn't apply to both screens
 			break;
 			
 		case 0x01:
@@ -996,16 +1001,23 @@ void PPU_Write8(u32 addr, u8 val)
 			PPU_BG3Prio = ((val & 0x08) != 0) && (PPU_Mode == 1);
 			if (PPU_BG3Prio)
 			{
-				*(u32*)0x04000008 = (*(u32*)0x04000008 & 0xFFF0FFF0) | 0x00020001;
-				*(u32*)0x0400000C = (*(u32*)0x0400000C & 0xFFFFFFF0);
+				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFF0FFF0) | 0x00020001;
+				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFFFFF0);
 			}
 			else
 			{
-				*(u32*)0x04000008 = (*(u32*)0x04000008 & 0xFFF0FFF0) | 0x00010000;
-				*(u32*)0x0400000C = (*(u32*)0x0400000C & 0xFFF0FFF0) | 0x00030002;
+				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFF0FFF0) | 0x00010000;
+				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFF0FFF0) | 0x00030002;
 			}
 			break;
 			
+		case 0x06:
+			*(vu16*)0x04000008 = (*(vu16*)0x04000008 & 0xFFFFFFBF) | ((val & 0x01) << 6);
+			*(vu16*)0x0400000A = (*(vu16*)0x0400000A & 0xFFFFFFBF) | ((val & 0x02) << 5);
+			*(vu16*)0x0400000C = (*(vu16*)0x0400000C & 0xFFFFFFBF) | ((val & 0x04) << 4);
+			*(vu16*)0x0400000E = (*(vu16*)0x0400000E & 0xFFFFFFBF) | ((val & 0x08) << 3);
+			*(vu16*)0x0400004C = (val & 0xF0) | (val >> 4);
+			break;
 			
 		case 0x07: PPU_SetBGSCR(0, val); break;
 		case 0x08: PPU_SetBGSCR(1, val); break;
@@ -1156,7 +1168,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
-		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; iprintf("2142: %04X\n", val); break;
+		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

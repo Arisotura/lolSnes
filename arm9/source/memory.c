@@ -30,6 +30,7 @@
 #define MPTR_SLOW		(1 << 28)
 #define MPTR_SPECIAL	(1 << 29)
 #define MPTR_READONLY	(1 << 30)
+#define MPTR_SRAM		(1 << 31)
 
 u32 ROM_BaseOffset DTCM_BSS;
 u32 ROM_HeaderOffset;
@@ -53,6 +54,7 @@ bool Mem_HiROM;
 u8 Mem_SysRAM[0x20000];
 u32 Mem_SRAMMask;
 u8* Mem_SRAM = NULL;
+FILE* Mem_SRAMFile DTCM_DATA = NULL;
 
 //u8 Mem_IO_21xx[0x100] DTCM_BSS;
 //u8 Mem_IO_42xx[0x20] DTCM_BSS;
@@ -68,11 +70,15 @@ u8* Mem_SRAM = NULL;
 // * b29=1, b30=0: I/O, expansion RAM; arg = zero
 // * b29=0, b30=1: cached ROM; arg = pointer to RAM
 // * b29=1, b30=1: non-cached ROM; arg = file offset
-u32 Mem_PtrTable[0x800] DTCM_BSS;
-// memory timings (6 or 8 master cycles)
-//u8 Mem_TimingTable[0x800] DTCM_BSS;
+//
+// cheat: we place stuff before the start of the actual array-- those 
+// can be accessed quickly by the CPU core since it keeps a pointer to
+// this table in one of the CPU registers
+//
+// table[-1] -> SRAM dirty flag
+u32 _Mem_PtrTable[0x1 + 0x800] DTCM_BSS;
+u32* Mem_PtrTable DTCM_BSS;
 
-IPCStruct _IPC = {0};
 IPCStruct* IPC;
 
 u8 Mem_HVBJOY = 0x00;
@@ -142,7 +148,7 @@ void ROM_DoUncacheBank(int bank)
 
 		if (bank < 0x7E)
 		{
-			if (bank >= 0x40)
+			if (bank >= 0x40 && bank < 0x70)
 			{
 				MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
 				MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
@@ -234,7 +240,7 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 			fseek(ROM_File, base + (bank << 15), SEEK_SET);
 			fread(ptr, 0x8000, 1, ROM_File);
 
-			if (bank >= 0x40)
+			if (bank >= 0x40 && bank < 0x70)
 			{
 				MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
 				MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
@@ -325,6 +331,9 @@ bool Mem_LoadROM(char* path)
 {
 	if (ROM_File != NULL)
 		fclose(ROM_File);
+		
+	if (Mem_SRAMFile != NULL)
+		fclose(Mem_SRAMFile);
 	
 	ROM_File = fopen(path, "rb");
 	if (!ROM_File) return false;
@@ -372,6 +381,15 @@ bool Mem_LoadROM(char* path)
 	u8 sramsize; fread(&sramsize, 1, 1, ROM_File);
 	Mem_SRAMMask = sramsize ? ((1024 << sramsize) - 1) : 0;
 	Mem_SRAMMask &= 0x000FFFFF;
+	iprintf("SRAM size: %dKB\n", (Mem_SRAMMask+1) >> 10);
+	
+	char srampath[256];
+	strncpy(srampath, path, strlen(path)-3);
+	strncpy(srampath + strlen(path)-3, "srm", 3);
+	srampath[strlen(path)] = '\0';
+	Mem_SRAMFile = fopen(srampath, "r+");
+	if (!Mem_SRAMFile) Mem_SRAMFile = fopen(srampath, "w+");
+	iprintf("SRAM: %s\n(%s)\n", srampath, Mem_SRAMFile?"success":"fail");
 	
 	return true;
 }
@@ -402,6 +420,12 @@ void Mem_Reset()
 	Mem_SRAM = malloc(Mem_SRAMMask + 1);
 	for (i = 0; i <= Mem_SRAMMask; i += 4)
 		*(u32*)&Mem_SRAM[i] = 0;
+		
+	if (Mem_SRAMFile)
+		fread(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+		
+	Mem_PtrTable = &_Mem_PtrTable[0x1];
+	Mem_PtrTable[-0x1] = 0;
 	
 	for (b = 0; b < 0x40; b++)
 	{
@@ -410,7 +434,7 @@ void Mem_Reset()
 		MEM_PTR(b, 0x4000) = MEM_PTR(0x80 + b, 0x4000) = MPTR_SPECIAL;
 		
 		if (Mem_HiROM)
-			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | (u32)&Mem_SRAM[(b << 13) & Mem_SRAMMask];
+			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[(b << 13) & Mem_SRAMMask];
 		else
 			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | MPTR_SPECIAL;
 	}
@@ -440,12 +464,13 @@ void Mem_Reset()
 	}
 	else
 	{
-		for (b = 0; b < 0x3D; b++)
+		for (b = 0; b < 0x30; b++)
 			for (a = 0; a < 0x10000; a += 0x2000)
 				MEM_PTR(0x40 + b, a) = MEM_PTR(0xC0 + b, a) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + 0x200000 + (b << 15) + (a & 0x7FFF));
 
-		for (a = 0; a < 0x10000; a += 0x2000)
-			MEM_PTR(0x7D, a) = MEM_PTR(0xFD, a) = MPTR_SLOW | (u32)&Mem_SRAM[a & Mem_SRAMMask];
+		for (b = 0; b < 0x0E; b++)
+			for (a = 0; a < 0x8000; a += 0x2000)
+				MEM_PTR(0x70 + b, a) = MEM_PTR(0xF0 + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((b << 15) + a) & Mem_SRAMMask];
 
 		for (b = 0; b < 0x02; b++)
 			for (a = 0; a < 0x10000; a += 0x2000)
@@ -463,14 +488,15 @@ void Mem_Reset()
 	ROM_Bank0 = ROM_Cache[0];
 	ROM_Bank0End = ROM_Bank0 + 0x8000;
 	
-	// breaks CPU/SPC sync
 	ROM_ApplySpeedHacks();
 	
-	iprintf("mm %08X\n", (void*)Mem_ROMRead16);
-	iprintf("sysram = %08X | %08X\n", &Mem_SysRAM[0], MEM_PTR(0x7F, 0x8000));
+	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
 	
-		// get uncached address
-	IPC = (u8*)((u32)(&_IPC) | 0x00400000);
+	// get uncached address
+	u32 ipcsize = (sizeof(IPCStruct) + 0x1F) & ~0x1F;
+	IPC = memalign(32, ipcsize);
+	DC_InvalidateRange(IPC, ipcsize);
+	IPC = memUncached(IPC);
 	iprintf("IPC struct = %08X\n", IPC);
 	fifoSendValue32(FIFO_USER_01, 3);
 	fifoSendAddress(FIFO_USER_01, IPC);
@@ -483,6 +509,18 @@ void Mem_Reset()
 	Mem_DivRes = 0;
 	
 	PPU_Reset();
+}
+
+
+void Mem_SaveSRAM()
+{
+	if (Mem_SRAMFile && Mem_PtrTable[-0x1])
+	{
+		iprintf("SRAM save\n");
+		Mem_PtrTable[-0x1] = 0;
+		fseek(Mem_SRAMFile, 0, SEEK_SET);
+		fwrite(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+	}
 }
 
 

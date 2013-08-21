@@ -28,7 +28,7 @@ extern u8* ROM_Bank0;
 extern u8* ROM_Bank0End;
 
 extern bool Mem_HiROM;
-extern u32 Mem_PtrTable[0x800] DTCM_BSS;
+extern u32* Mem_PtrTable DTCM_BSS;
 
 extern u8 Mem_SysRAM[0x20000];
 
@@ -40,6 +40,8 @@ void ROM_DoCacheBank(int bank, int type);
 
 bool Mem_LoadROM(char* path);
 void Mem_Reset();
+
+void Mem_SaveSRAM();
 
 ITCM_CODE u8 Mem_IORead8(u32 addr);
 ITCM_CODE u16 Mem_IORead16(u32 addr);

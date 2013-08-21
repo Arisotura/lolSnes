@@ -325,28 +325,21 @@ frameloop:
 			
 emuloop:
 			stmdb sp!, {spcCycles}
-			stmdb sp!, {spcPC}
+			@stmdb sp!, {spcPC}
 
 			Prefetch8
 			ldr r0, [opTable, r0, lsl #0x2]
 			bx r0
 op_return:
-		
+			
+			@ guard -- freezes if PC goes below 0x0500
+			@ldmia sp!, {r12}
+			@mov r3, spcPC, lsr #0x10
+			@cmp r3, #0x0500
+			@yy:
+			@blt yy
+			
 			@ timers emulation
-			
-			@ debug
-			ldr r3, =IPC
-			ldr r3, [r3]
-			mov r2, spcPC, lsr #0x10
-			strb r2, [r3, #8]
-			mov r2, r2, lsr #0x8
-			strb r2, [r3, #9]
-			
-			ldmia sp!, {r12}
-			mov r3, spcPC, lsr #0x10
-			cmp r3, #0x0500
-			yy:
-			blt yy
 		
 			ldmia sp!, {r3}
 			sub r3, r3, spcCycles

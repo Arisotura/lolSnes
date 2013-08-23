@@ -275,55 +275,38 @@ void ROM_ApplySpeedHacks()
 	// TODO look into other banks? low priority I guess
 	// most games would put their main loop into bank 0
 	u8* bank = ROM_Bank0;
-	int i, status, start;
-	u8 flagaddr = 0x00;
-	
-	// TODO support for SuperDAT speedhacks?
-	// (main issue is that the SuperDAT contains all kinds of hacks, including ones we may not want)
-	
-	// WAI: 0xCB
-	// NOP: 0xEA
-	
-	// speed hack 1: turn SMW-style idle loop into WAI loop
-	// loop form: LDA $xx | BEQ start | stuff | BRA start
-	status = 0; start = 0;
+	int i;
+
 	for (i = 2; i < 0x8000;)
 	{
-		if (bank[i] == 0xA5 && bank[i+2] == 0xF0 && bank[i+3] == 0xFC)
+		//if (bank[i] == 0xA5 && bank[i+2] == 0xF0 && bank[i+3] == 0xFC)
+		if (bank[i] == 0xA5 && (bank[i+2] & 0x1F) == 0x10 && bank[i+3] == 0xFC)
 		{
-			status = 1;
-			start = i;
-			flagaddr = bank[i+1];
+			u8 branchtype = bank[i+2];
+			bank[i+2] = 0x42;
+			bank[i+3] = (bank[i+3] & 0x0F) | (branchtype & 0xF0);
+			
+			iprintf("Speed hack installed @ 80:%04X\n", 0x8000+i);
+			
 			i += 4;
 		}
-		else if (status == 1)
+		else if (bank[i] == 0xAD && (bank[i+3] & 0x1F) == 0x10 && bank[i+4] == 0xFB)
 		{
-			if (bank[i] == 0x80 && (s8)bank[i+1] == (start - (i + 2)))
+			u16 addr = bank[i+1] | (bank[i+2] << 8);
+			
+			if ((addr & 0xFFF0) != 0x2140)
 			{
-				/*bank[start-2] = 0x80;
-				bank[start-1] = 0x02;
-				bank[start] = 0xCB;
-				//bank[start+1] = 0xE6;
-				//bank[start+2] = flagaddr;
-				bank[start+1] = 0xEA;
-				bank[start+2] = 0xEA;
-				bank[start+3] = 0xEA;*/
-				u8 branchtype = bank[start+2];
-				bank[start+2] = 0x42;
-				bank[start+3] = (bank[start+3] & 0x0F) | (branchtype & 0xF0);
+				u8 branchtype = bank[i+3];
+				bank[i+3] = 0x42;
+				bank[i+4] = (bank[i+4] & 0x0F) | (branchtype & 0xF0);
 				
-				iprintf("Speed hack installed @ 80:%04X\n", 0x8000+start);
-				
-				status = 0;
+				iprintf("Speed hack installed @ 80:%04X\n", 0x8000+i);
 			}
 			
-			i += 2;
+			i += 5;
 		}
 		else
-		{
-			status = 0;
 			i++;
-		}
 	}
 }
 

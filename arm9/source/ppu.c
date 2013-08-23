@@ -108,7 +108,7 @@ typedef struct
 } PPU_Background;
 PPU_Background PPU_BG[4];
 
-u8 PPU_ForcedBlank;
+u16 PPU_MasterBright;
 u8 PPU_Mode;
 u8 PPU_BG3Prio;
 
@@ -212,7 +212,7 @@ void PPU_Reset()
 	}
 	
 	
-	PPU_ForcedBlank = 0;
+	PPU_MasterBright = 0;
 	PPU_Mode = 0;
 	PPU_BG3Prio = 0;
 	
@@ -934,10 +934,18 @@ void PPU_Write8(u32 addr, u8 val)
 	
 	switch (addr)
 	{
-		case 0x00:
+		case 0x00: // force blank/master brightness
+			// ignore it during vblank
+			//if (Mem_HVBJOY & 0x80) break;
+			
 			if (val & 0x80) val = 0;
-			// TODO find an efficient way to emulate that
-			// MASTER_BRIGHT would be all good if it didn't apply to both screens
+			else val &= 0x0F;
+			if (val == 0x0F)
+				PPU_MasterBright = 0x0000;
+			else if (val == 0x00)
+				PPU_MasterBright = 0x8010;
+			else
+				PPU_MasterBright = 0x8000 | (15 - (val & 0x0F));
 			break;
 			
 		case 0x01:
@@ -1187,6 +1195,8 @@ void PPU_Write16(u32 addr, u16 val)
 ITCM_CODE void PPU_VBlank()
 {
 	int i;
+	
+	*(u16*)0x0400006C = PPU_MasterBright;
 	
 	if (PPU_CGRDirty)
 	{

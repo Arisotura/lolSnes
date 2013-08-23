@@ -947,7 +947,7 @@ void PPU_Write8(u32 addr, u8 val)
 				u16 base = (val & 0x07) << 14;
 				u16 gap = (val & 0x18) << 10;
 				PPU_SetOBJCHR(base, gap);
-				iprintf("OBJ base:%08X gap:%08X | %08X\n", base, gap, (u32)&PPU_VRAM + base);
+				//iprintf("OBJ base:%08X gap:%08X | %08X\n", base, gap, (u32)&PPU_VRAM + base);
 			}
 			break;
 			
@@ -1011,7 +1011,7 @@ void PPU_Write8(u32 addr, u8 val)
 			}
 			break;
 			
-		case 0x06:
+		case 0x06: // mosaic
 			*(vu16*)0x04000008 = (*(vu16*)0x04000008 & 0xFFFFFFBF) | ((val & 0x01) << 6);
 			*(vu16*)0x0400000A = (*(vu16*)0x0400000A & 0xFFFFFFBF) | ((val & 0x02) << 5);
 			*(vu16*)0x0400000C = (*(vu16*)0x0400000C & 0xFFFFFFBF) | ((val & 0x04) << 4);

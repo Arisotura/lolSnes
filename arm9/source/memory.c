@@ -54,7 +54,9 @@ bool Mem_HiROM;
 u8 Mem_SysRAM[0x20000];
 u32 Mem_SRAMMask;
 u8* Mem_SRAM = NULL;
-FILE* Mem_SRAMFile DTCM_DATA = NULL;
+
+char Mem_ROMPath[256] DTCM_BSS;
+char Mem_SRAMPath[256] DTCM_BSS;
 
 //u8 Mem_IO_21xx[0x100] DTCM_BSS;
 //u8 Mem_IO_42xx[0x20] DTCM_BSS;
@@ -106,6 +108,8 @@ bool ROM_CheckHeader(u32 offset)
 
 void ROM_DoUncacheBank(int bank)
 {
+	if (!Mem_HiROM) bank &= 0x7F;
+	
 	if (Mem_HiROM)
 	{
 		if (bank < 0x40)
@@ -144,8 +148,6 @@ void ROM_DoUncacheBank(int bank)
 	}
 	else
 	{
-		bank &= 0x7F;
-
 		if (bank < 0x7E)
 		{
 			if (bank >= 0x40 && bank < 0x70)
@@ -167,6 +169,7 @@ void ROM_DoUncacheBank(int bank)
 void _ROM_DoCacheBank(int bank, int type, bool force)
 {
 	u8 idx;
+	if (!Mem_HiROM) bank &= 0x7F;
 	if (bank >= 32)
 	{
 		if (type == 1) idx = ROMCACHE_SIZE;
@@ -233,8 +236,6 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 	}
 	else
 	{
-		bank &= 0x7F;
-
 		if (bank < 0x7E)
 		{
 			fseek(ROM_File, base + (bank << 15), SEEK_SET);
@@ -332,8 +333,7 @@ bool Mem_LoadROM(char* path)
 	if (ROM_File != NULL)
 		fclose(ROM_File);
 		
-	if (Mem_SRAMFile != NULL)
-		fclose(Mem_SRAMFile);
+	strncpy(Mem_ROMPath, path, 256);
 	
 	ROM_File = fopen(path, "rb");
 	if (!ROM_File) return false;
@@ -383,13 +383,12 @@ bool Mem_LoadROM(char* path)
 	Mem_SRAMMask &= 0x000FFFFF;
 	iprintf("SRAM size: %dKB\n", (Mem_SRAMMask+1) >> 10);
 	
-	char srampath[256];
-	strncpy(srampath, path, strlen(path)-3);
-	strncpy(srampath + strlen(path)-3, "srm", 3);
-	srampath[strlen(path)] = '\0';
-	Mem_SRAMFile = fopen(srampath, "r+");
-	if (!Mem_SRAMFile) Mem_SRAMFile = fopen(srampath, "w+");
-	iprintf("SRAM: %s\n(%s)\n", srampath, Mem_SRAMFile?"success":"fail");
+	strncpy(Mem_SRAMPath, path, strlen(path)-3);
+	strncpy(Mem_SRAMPath + strlen(path)-3, "srm", 3);
+	Mem_SRAMPath[strlen(path)] = '\0';
+	FILE* sram = fopen(Mem_SRAMPath, "r+");
+	if (!sram) sram = fopen(Mem_SRAMPath, "w+");
+	if (sram) fclose(sram);
 	
 	return true;
 }
@@ -421,8 +420,12 @@ void Mem_Reset()
 	for (i = 0; i <= Mem_SRAMMask; i += 4)
 		*(u32*)&Mem_SRAM[i] = 0;
 		
-	if (Mem_SRAMFile)
-		fread(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+	FILE* sram = fopen(Mem_SRAMPath, "r");
+	if (sram)
+	{
+		fread(Mem_SRAM, Mem_SRAMMask+1, 1, sram);
+		fclose(sram);
+	}
 		
 	Mem_PtrTable = &_Mem_PtrTable[0x1];
 	Mem_PtrTable[-0x1] = 0;
@@ -514,12 +517,17 @@ void Mem_Reset()
 
 void Mem_SaveSRAM()
 {
-	if (Mem_SRAMFile && Mem_PtrTable[-0x1])
+	if (!Mem_PtrTable[-0x1])
+		return;
+	
+	FILE* sram = fopen(Mem_SRAMPath, "r+");
+	if (sram)
 	{
 		iprintf("SRAM save\n");
 		Mem_PtrTable[-0x1] = 0;
-		fseek(Mem_SRAMFile, 0, SEEK_SET);
-		fwrite(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+		fseek(sram, 0, SEEK_SET);
+		fwrite(Mem_SRAM, Mem_SRAMMask+1, 1, sram);
+		fclose(sram);
 	}
 }
 

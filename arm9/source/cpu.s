@@ -209,9 +209,12 @@ CPU_Regs:
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	sub snesCycles, snesCycles, #0x80000
+	tst r3, #0x40000000
+	bne 1f
 	bic r3, r3, #0xF0000000
 	mov r2, snesS, lsl #0x3
 	strb \src, [r3, r2, lsr #0x13]
+1:
 	sub snesS, snesS, #0x10000
 .endm
 
@@ -219,12 +222,15 @@ CPU_Regs:
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	sub snesCycles, snesCycles, #0x100000
+	tst r3, #0x40000000
+	bne 1f
 	bic r3, r3, #0xF0000000
 	mov r2, snesS, lsl #0x3
 	add r3, r3, r2, lsr #0x13
 	strb \src, [r3, #-0x1]
 	mov \src, \src, lsr #0x8
 	strb \src, [r3]
+1:
 	sub snesS, snesS, #0x20000
 .endm
 
@@ -614,12 +620,15 @@ CPU_TriggerIRQ:
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	mov r2, snesS, lsl #0x3
 	add r3, r3, r2, lsr #0x13
-	bic r3, r3, #0xF0000000
 	tst snesP, #flagE
 	subne snesS, snesS, #0x30000
 	subne snesCycles, snesCycles, #0x180000
 	subeq snesS, snesS, #0x40000
 	subeq snesCycles, snesCycles, #0x200000
+	tst r3, #0x40000000
+	bne irq_nostack
+	bic r3, r3, #0xF0000000
+	tst snesP, #flagE
 	streqb snesPBR, [r3]
 	subeq r3, r3, #1
 	mov r0, snesPC, lsr #0x10
@@ -627,6 +636,7 @@ CPU_TriggerIRQ:
 	mov r0, r0, lsr #0x8
 	strb r0, [r3]
 	strb snesP, [r3, #-2]
+irq_nostack:
 	bic snesP, snesP, #(flagD|flagW)
 	orr snesP, snesP, #flagI
 	bic snesPBR, snesPBR, #0xFF
@@ -643,12 +653,15 @@ CPU_TriggerNMI:
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	mov r2, snesS, lsl #0x3
 	add r3, r3, r2, lsr #0x13
-	bic r3, r3, #0xF0000000
 	tst snesP, #flagE
 	subne snesS, snesS, #0x30000
 	subne snesCycles, snesCycles, #0x180000
 	subeq snesS, snesS, #0x40000
 	subeq snesCycles, snesCycles, #0x200000
+	tst r3, #0x40000000
+	bne nmi_nostack
+	bic r3, r3, #0xF0000000
+	tst snesP, #flagE
 	streqb snesPBR, [r3]
 	subeq r3, r3, #1
 	mov r0, snesPC, lsr #0x10
@@ -656,6 +669,7 @@ CPU_TriggerNMI:
 	mov r0, r0, lsr #0x8
 	strb r0, [r3]
 	strb snesP, [r3, #-2]
+nmi_nostack:
 	bic snesP, snesP, #(flagD|flagW)
 	orr snesP, snesP, #flagI
 	bic snesPBR, snesPBR, #0xFF
@@ -725,7 +739,7 @@ emuloop:
 				ldr r0, [opTable, r0, lsl #0x2]
 				bx r0
 op_return:
-				
+
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start
 				@ (who cares if the HBlank end is one pixel off)
@@ -797,6 +811,7 @@ vblank:
 
 .macro GetAddr_AbsIndIndirect
 	Prefetch16
+	add r0, r0, snesPBR, lsl #0x10
 	add r0, r0, snesX
 	MemRead16
 .endm

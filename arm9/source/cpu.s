@@ -712,6 +712,9 @@ CPU_Run:
 frameloop:
 		ldr r0, =0x05540000
 		add snesCycles, snesCycles, r0
+		mov r0, #0
+		ldr r1, =PPU_VCount
+		strh r0, [r1]
 		b emuloop
 		
 newline:
@@ -720,6 +723,11 @@ newline:
 			movne r0, #0x00000001
 			ldreq r0, =0x05540001
 			add snesCycles, snesCycles, r0
+			
+			ldr r1, =PPU_VCount
+			ldrh r0, [r1]
+			add r0, r0, #1
+			strh r0, [r1]
 			
 			ldr r0, =(flagI|flagIV)
 			tst snesP, r0
@@ -754,25 +762,26 @@ op_return:
 				bge emuloop
 				
 emulate_hardware:
-			ldr r1, =Mem_HVBJOY
-			ldrb r2, [r1]
-			mov r0, snesCycles, lsl #0x10
-			cmp r0, #0xE00000
+			ldr r0, =Mem_HVBJOY
+			ldrb r2, [r0]
+			mov r1, snesCycles, lsl #0x10
+			
+			cmp r1, #0xE00000
 			orrge r2, r2, #0x80
-			strgeb r2, [r1]
+			strgeb r2, [r0]
 			bge vblank
 			bic r2, r2, #0x80
-			strb r2, [r1]
+			strb r2, [r0]
 			b newline
 			
 vblank:
 			tsteq snesP, #flagI2
 			beq CPU_TriggerNMI
-			mov r1, #0x83
-			cmp r0, r1, lsl #0x11
+			mov r3, #0x83
+			cmp r1, r3, lsl #0x11
 			blt newline
 			
-		sub snesCycles, snesCycles, r1, lsl #0x1
+		sub snesCycles, snesCycles, r3, lsl #0x1
 		swi #0x50000
 		b frameloop
 		

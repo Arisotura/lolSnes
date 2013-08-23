@@ -33,7 +33,10 @@
 #define BG_PAL_BASE		0x06890000
 
 
+// TODO make this configurable
 u16 PPU_YOffset = 16;
+
+u16 PPU_VCount = 0;
 
 u8 PPU_CGRAMAddr = 0;
 u16 PPU_CurColor = 0xFFFF;
@@ -157,6 +160,8 @@ u8 PPU_SpriteSize[16] =
 void PPU_Reset()
 {
 	int i;
+	
+	PPU_VCount = 0;
 	
 	PPU_CGRAMAddr = 0;
 	PPU_CurColor = 0xFFFF;
@@ -935,9 +940,6 @@ void PPU_Write8(u32 addr, u8 val)
 	switch (addr)
 	{
 		case 0x00: // force blank/master brightness
-			// ignore it during vblank
-			//if (Mem_HVBJOY & 0x80) break;
-			
 			if (val & 0x80) val = 0;
 			else val &= 0x0F;
 			if (val == 0x0F)
@@ -1195,6 +1197,12 @@ void PPU_Write16(u32 addr, u16 val)
 ITCM_CODE void PPU_VBlank()
 {
 	int i;
+	
+	// if we're not within SNES VBlank at this time, it means we're lagging
+	// and our registers are likely to contain bad values
+	// (especially master brightness)
+	if (PPU_VCount < 262)
+		return;
 	
 	*(u16*)0x0400006C = PPU_MasterBright;
 	

@@ -28,7 +28,7 @@ void vblank()
 {
 	if (!IPC) return;
 	
-	IPC->Input_XY = *(volatile u8*)0x04000136;
+	IPC->Input_XY = *(vu8*)0x04000136;
 }
 
 
@@ -47,7 +47,7 @@ int main()
 	// wait till the ARM9 has mapped VRAM for us
 	for (;;)
 	{
-		u8 vrammap = *(volatile u8*)0x04000240;
+		u8 vrammap = *(vu8*)0x04000240;
 		if (vrammap & 0x01) break;
 	}
 	
@@ -58,9 +58,19 @@ int main()
 	for (i = 0; i < 64; i += 4)
 		*dst++ = *src++;
 	
-	*(u32*)0x04000210 |= 0x00000008;
-	*(u16*)0x04000100 = 0xFBE9;
-	*(u16*)0x04000102 = 0x00C0;
+	// set timer 0 to run at ~32000Hz
+	// (reload value will be compensated every 128 cycles)
+	irqEnable(IRQ_TIMER0);
+	*(vu16*)0x04000100 = 0xFBE9;
+	*(vu16*)0x04000102 = 0x00C0;
+	//irqSet(IRQ_TIMER0, DSP_Mix);
+	
+	// set timer 1 to cascade from timer 0
+	// mix 16 samples worth of audio every 512 cycles
+	irqEnable(IRQ_TIMER1);
+	*(vu16*)0x04000104 = 0xFFF0;
+	*(vu16*)0x04000106 = 0x00C4;
+	irqSet(IRQ_TIMER1, DSP_Mix);
 
 	for (;;)
 	{

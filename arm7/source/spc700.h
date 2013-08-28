@@ -21,6 +21,10 @@
 
 #include "../../common/ipc.h"
 
+#define spcPrintf(...) { snprintf(IPC->Dbg_String, 255, __VA_ARGS__); IPC->Dbg_String[255] = '\0'; fifoSendValue32(FIFO_USER_02, 1); }
+
+#define SPC_RAM ((u8*)0x06000000)
+
 typedef union
 {
 	u16 val;
@@ -70,5 +74,13 @@ u8 SPC_IORead8(u16 addr);
 u16 SPC_IORead16(u16 addr);
 void SPC_IOWrite8(u16 addr, u8 val);
 void SPC_IOWrite16(u16 addr, u16 val);
+
+
+void DSP_Reset();
+
+void DSP_Mix();
+
+u8 DSP_Read(u8 reg);
+void DSP_Write(u8 reg, u8 val);
 
 #endif

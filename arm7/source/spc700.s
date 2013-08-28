@@ -78,10 +78,15 @@ SPC_UpdateMemMap:
 	bic r3, \addr, #0x000F
 	cmp r3, #0x00F0
 	ldrneb r0, [memory, \addr]
+	bne 1f
+	@ speedhack: when reading timer values, eat cycles
+	cmp r0, #0xFD
+	movge spcCycles, #0
 	.ifnc \addr, r0
-		moveq r0, \addr
+		mov r0, \addr
 	.endif
-	bleq SPC_IORead8
+	bl SPC_IORead8
+1:
 .endm
 
 .macro MemRead16 addr=r0
@@ -240,7 +245,7 @@ OpTableStart:
 	.long OP_CLRV, OP_UNK, OP_SET7, OP_BBS_7, OP_MOV_A_DP, OP_MOV_A_lm, OP_MOV_A_mX, OP_MOV_A_m_X	@E
 	.long OP_MOV_A_Imm, OP_MOV_X_lm, OP_UNK, OP_MOV_Y_DP, OP_MOV_Y_lm, OP_NOTC, OP_POP_Y, OP_UNK
 	.long OP_BEQ, OP_UNK, OP_CLR7, OP_BBC_7, OP_MOV_A_DP_X, OP_MOV_A_lmX, OP_MOV_A_lmY, OP_MOV_A_m_Y	@F
-	.long OP_MOV_X_DP, OP_MOV_X_DP_Y, OP_MOV_DP_DP, OP_MOV_Y_DP_X, OP_INC_Y, OP_MOV_Y_A, OP_DBNZ_Y, OP_UNK
+	.long OP_MOV_X_DP, OP_MOV_X_DP_Y, OP_MOV_DP_DP, OP_MOV_Y_DP_X, OP_INC_Y, OP_MOV_Y_A, OP_DBNZ_Y, OP_HAX_FF
 
 @ --- Misc. functions ---------------------------------------------------------
 
@@ -271,6 +276,7 @@ OpTableStart:
 .endm
 
 
+.global itercount
 itercount:
 	.long 0
 
@@ -309,8 +315,6 @@ SPC_Run:
 	LoadRegs
 	
 frameloop:
-		@ldr r0, =0x42AB
-		@add spcCycles, spcCycles, r0
 		add spcCycles, spcCycles, #0x20
 		
 		ldr r0, =itercount
@@ -319,25 +323,22 @@ frameloop:
 		str r1, [r0]
 		tst r1, #0x3
 		ldr r0, =0x04000100
-		ldr r1, =0xFBE9
+		ldr r1, =0x0000FBE9
+		ldr r2, =0x0000FDF5
 		subeq r1, r1, #1
+		subeq r2, r2, #2
 		strh r1, [r0]
+		str r2, [r0, #0x308]
+		
+		stmdb sp!, {spcCycles}
 			
 emuloop:
 			stmdb sp!, {spcCycles}
-			@stmdb sp!, {spcPC}
 
 			Prefetch8
 			ldr r0, [opTable, r0, lsl #0x2]
 			bx r0
 op_return:
-			
-			@ guard -- freezes if PC goes below 0x0500
-			@ldmia sp!, {r12}
-			@mov r3, spcPC, lsr #0x10
-			@cmp r3, #0x0500
-			@yy:
-			@blt yy
 			
 			@ timers emulation
 		
@@ -346,48 +347,6 @@ op_return:
 			ldr r12, =SPC_Timers
 			ldrb r0, [r12]
 			
-			tst r0, #0x01
-			beq noTimer0
-			ldrb r1, [r12, #1]
-			subs r1, r1, r3
-			strplb r1, [r12, #1]
-			bpl noTimer0
-			add r1, r1, #0x80
-			strb r1, [r12, #1]
-			ldrb r1, [r12, #2]
-			ldrb r2, [r12, #3]
-			add r1, r1, #1
-			cmp r1, r2
-			strneb r1, [r12, #2]
-			bne noTimer0
-			mov r1, #0
-			strb r1, [r12, #2]
-			ldrb r1, [r12, #4]
-			add r1, r1, #1
-			strb r1, [r12, #4]
-			
-noTimer0:
-			tst r0, #0x02
-			beq noTimer1
-			ldrb r1, [r12, #5]
-			subs r1, r1, r3
-			strplb r1, [r12, #5]
-			bpl noTimer1
-			add r1, r1, #0x80
-			strb r1, [r12, #5]
-			ldrb r1, [r12, #6]
-			ldrb r2, [r12, #7]
-			add r1, r1, #1
-			cmp r1, r2
-			strneb r1, [r12, #6]
-			bne noTimer1
-			mov r1, #0
-			strb r1, [r12, #6]
-			ldrb r1, [r12, #8]
-			add r1, r1, #1
-			strb r1, [r12, #8]
-			
-noTimer1:
 			tst r0, #0x04
 			beq noTimer2
 			ldrb r1, [r12, #9]
@@ -412,17 +371,60 @@ noTimer2:
 			cmp spcCycles, #1
 			bge emuloop
 			
-		@swi #0x50000
+		ldmia sp!, {r3}
+		sub r3, r3, spcCycles
+		ldr r12, =SPC_Timers
+		ldrb r0, [r12]
+		
+		tst r0, #0x01
+		beq noTimer0
+		ldrb r1, [r12, #1]
+		subs r1, r1, r3
+		strplb r1, [r12, #1]
+		bpl noTimer0
+		add r1, r1, #0x80
+		strb r1, [r12, #1]
+		ldrb r1, [r12, #2]
+		ldrb r2, [r12, #3]
+		add r1, r1, #1
+		cmp r1, r2
+		strneb r1, [r12, #2]
+		bne noTimer0
+		mov r1, #0
+		strb r1, [r12, #2]
+		ldrb r1, [r12, #4]
+		add r1, r1, #1
+		strb r1, [r12, #4]
+		
+noTimer0:
+		tst r0, #0x02
+		beq noTimer1
+		ldrb r1, [r12, #5]
+		subs r1, r1, r3
+		strplb r1, [r12, #5]
+		bpl noTimer1
+		add r1, r1, #0x80
+		strb r1, [r12, #5]
+		ldrb r1, [r12, #6]
+		ldrb r2, [r12, #7]
+		add r1, r1, #1
+		cmp r1, r2
+		strneb r1, [r12, #6]
+		bne noTimer1
+		mov r1, #0
+		strb r1, [r12, #6]
+		ldrb r1, [r12, #8]
+		add r1, r1, #1
+		strb r1, [r12, #8]
+		
+noTimer1:
+			
+		@bl DSP_Mix
 		
 		@ wait for timer 0
-
 		mov r0, #1
 		mov r1, #0x00000008
 		swi #0x40000
-		
-		@ldr r3, =0x04000180
-		@mov r0, #0x6100
-		@strh r0, [r3]
 		
 		b frameloop
 		
@@ -542,7 +544,8 @@ blarg2:
 	eor r3, \a, \b
 	tst r3, #0x80
 	bne 1f
-	eor r3, \a, r12
+	@eor r3, \a, r12
+	eor r3, \b, r12
 	tst r3, #0x80
 	orrne spcPSW, spcPSW, #flagVH
 1:
@@ -644,7 +647,8 @@ OP_ADC_DP_Imm:
 @ --- ADDW --------------------------------------------------------------------
 
 OP_ADDW_YA_DP:
-	GetOp_DP
+	GetAddr_DP
+	MemRead16
 	orr r2, spcA, spcY, lsl #0x8
 	add r12, r2, r0
 	bic spcPSW, spcPSW, #flagNVHZC
@@ -656,7 +660,8 @@ OP_ADDW_YA_DP:
 	eor r3, r2, r0
 	tst r3, #0x8000
 	bne addw_1
-	eor r3, r2, r12
+	@eor r3, r2, r12
+	eor r3, r0, r12
 	tst r3, #0x8000
 	orrne spcPSW, spcPSW, #flagVH
 addw_1:
@@ -1273,10 +1278,8 @@ OP_DECW_DP:
 OP_DIV_YA:
 	cmp spcX, #0
 	beq div_zero
-	mov r0, spcY, lsl #0x18
-	orr r0, spcA, r0, asr #0x10
-	mov r1, spcX, lsl #0x18
-	mov r1, r1, asr #0x18
+	orr r0, spcA, spcY, lsl #0x8
+	mov r1, spcX
 	swi #0x90000
 	ands spcA, r0, #0xFF
 	and spcY, r1, #0xFF
@@ -1478,6 +1481,7 @@ OP_JMP_a_X:
 	MemRead16
 	SetPC r0
 	AddCycles 6
+	bl SPC_ApplySpeedHacks
 	b op_return
 	
 OP_JMP_a:
@@ -2284,7 +2288,8 @@ OP_SETP:
 @ --- SUBW --------------------------------------------------------------------
 
 OP_SUBW_YA_DP:
-	GetOp_DP
+	GetAddr_DP
+	MemRead16
 	orr r2, spcA, spcY, lsl #0x8
 	sub r12, r2, r0
 	bic spcPSW, spcPSW, #flagNVHZC
@@ -2347,4 +2352,55 @@ OP_XCN_A:
 	orrne spcPSW, spcPSW, #flagN
 	biceq spcPSW, spcPSW, #flagN
 	AddCycles 5
+	b op_return
+	
+@ --- Speed hack opcodes ------------------------------------------------------
+@
+@ opcode FF: eat cycles and branch back
+@
+@ -----------------------------------------------------------------------------
+
+hax_branch:
+	add spcPC, spcPC, r0, lsl #0x10
+	b op_return
+	
+
+OP_HAX_FF:
+	mov spcCycles, #0
+	Prefetch8
+	and r1, r0, #0xE0
+	and r0, r0, #0x0F
+	sub r0, r0, #0x10
+	add pc, pc, r1, lsr #1
+	nop
+	tst spcPSW, #flagN
+	beq hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagN
+	bne hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagV
+	beq hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagV
+	bne hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagC
+	beq hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagC
+	bne hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagZ
+	beq hax_branch
+	b op_return
+	nop
+	tst spcPSW, #flagZ
+	bne hax_branch
 	b op_return

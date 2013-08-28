@@ -33,6 +33,12 @@
 bool running = false;
 
 
+void arm7print(u32 value32, void * userdata)
+{
+	iprintf(IPC->Dbg_String);
+}
+
+
 char* filelist;
 int nfiles;
 
@@ -177,6 +183,8 @@ int main(void)
 	irqEnable(IRQ_VBLANK);
 	irqSet(IRQ_VBLANK, vblank_idle);
 	
+	fifoSetValue32Handler(FIFO_USER_02, arm7print, NULL);
+	
 	//vramSetBankA(VRAM_A_LCD);
 	videoSetMode(MODE_0_2D);
 
@@ -278,7 +286,7 @@ int main(void)
 void printvar()
 {
 	asm("stmdb sp!, {r12}");
-	iprintf("printvar %04X\n", IPC->_debug);
+	//iprintf("printvar %04X\n", IPC->_debug);
 	asm("ldmia sp!, {r12}");
 }
 

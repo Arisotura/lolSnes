@@ -36,11 +36,15 @@ struct SPC_TimersStruct
 } SPC_Timers;
 
 u8 SPC_ROMAccess;
+u8 SPC_DSPAddr;
+
+bool speedhaxed = false;
 
 
 void SPC_InitMisc()
 {
 	SPC_ROMAccess = 1;
+	SPC_DSPAddr = 0;
 	
 	SPC_Timers.EnableMask = 0;
 	SPC_Timers.Timer[0].CycleCount = 128;
@@ -55,6 +59,10 @@ void SPC_InitMisc()
 	SPC_Timers.Timer[2].IterCount = 0;
 	SPC_Timers.Timer[2].Limit = 0;
 	SPC_Timers.Timer[2].Val = 0;
+	
+	DSP_Reset();
+	
+	speedhaxed = false;
 }
 
 u8 SPC_IORead8(u16 addr)
@@ -64,6 +72,9 @@ u8 SPC_IORead8(u16 addr)
 	u8 ret = 0;
 	switch (addr)
 	{
+		case 0xF2: ret = SPC_DSPAddr; break;
+		case 0xF3: ret = DSP_Read(SPC_DSPAddr); break;
+		
 		case 0xF4: ret = IPC->SPC_IOPorts[0]; break;
 		case 0xF5: ret = IPC->SPC_IOPorts[1]; break;
 		case 0xF6: ret = IPC->SPC_IOPorts[2]; break;
@@ -122,6 +133,9 @@ void SPC_IOWrite8(u16 addr, u8 val)
 			}
 			break;
 			
+		case 0xF2: SPC_DSPAddr = val; break;
+		case 0xF3: DSP_Write(SPC_DSPAddr, val); break;
+			
 		case 0xF4: IPC->SPC_IOPorts[4] = val; break;
 		case 0xF5: IPC->SPC_IOPorts[5] = val; break;
 		case 0xF6: IPC->SPC_IOPorts[6] = val; break;
@@ -151,4 +165,29 @@ void SPC_IOWrite16(u16 addr, u16 val)
 	}
 	
 	asm("ldmia sp!, {r1-r3, r12}");
+}
+
+
+void SPC_ApplySpeedHacks()
+{
+	if (speedhaxed) return;
+	speedhaxed = true;
+	return;
+	int i;
+	for (i = 0; i < 0xFFC0;)
+	{
+		if (SPC_RAM[i] == 0xEC && SPC_RAM[i+1] >= 0xFD && SPC_RAM[i+1] <= 0xFE && SPC_RAM[i+2] == 0x00
+			&& (SPC_RAM[i+3] & 0x1F) == 0x10 && SPC_RAM[i+4] == 0xFB)
+		{
+			u8 offset = SPC_RAM[i+4] & 0x0F;
+			u8 branchtype = SPC_RAM[i+3] & 0xF0;
+			
+			SPC_RAM[i+3] = 0xFF;
+			SPC_RAM[i+4] = branchtype | offset;
+			i += 5;
+			continue;
+		}
+		
+		i++;
+	}
 }

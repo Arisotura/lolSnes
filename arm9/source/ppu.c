@@ -218,7 +218,7 @@ void PPU_Reset()
 	
 	
 	PPU_MasterBright = 0;
-	PPU_Mode = 0;
+	PPU_Mode = -1;
 	PPU_BG3Prio = 0;
 	
 	PPU_BGMain = 0;
@@ -250,6 +250,9 @@ void PPU_Reset()
 	*(u16*)0x0400000A = 0x0081 | (1 << 4) | (1 << 10);
 	*(u16*)0x0400000C = 0x0082 | (2 << 4) | (2 << 10);
 	*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
+	
+	
+	PPU_ModeChange(0);
 	
 	
 	printf("vram = %08X | %08X\n", (u32)&PPU_VRAM, (u32)&PPU_VRAMMap);
@@ -532,6 +535,13 @@ void PPU_ModeChange(u8 newmode)
 	
 	switch (newmode)
 	{
+		case 0:
+			PPU_SetBGColorDepth(0, 4);
+			PPU_SetBGColorDepth(1, 4);
+			PPU_SetBGColorDepth(2, 4);
+			PPU_SetBGColorDepth(3, 4);
+			break;
+		
 		case 1:
 			PPU_SetBGColorDepth(0, 16);
 			PPU_SetBGColorDepth(1, 16);

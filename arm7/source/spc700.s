@@ -433,6 +433,7 @@ noTimer1:
 		@bl DSP_Mix
 		
 		@ wait for timer 1
+		@ (do not wait if we missed the IRQ)
 		mov r0, #0
 		mov r1, #0x00000010
 		swi #0x40000

@@ -30,6 +30,9 @@
 #include "ppu.h"
 
 
+#define VERSION "v1.1"
+
+
 bool running = false;
 
 
@@ -143,7 +146,7 @@ void menuPrint(int x, int y, char* str)
 
 void makeMenu()
 {
-	menuPrint(0, 0, "- lolSnes v1.0 - by Mega-Mario -");
+	menuPrint(0, 0, "- lolSnes " VERSION " - by Mega-Mario -");
 	menuPrint(0, 1, "________________________________");
 	
 	int i;
@@ -226,7 +229,7 @@ int main(void)
 	
 	makeMenu();
 
-	iprintf("lolSnes v1.0 -- by Mega-Mario\n");
+	iprintf("lolSnes " VERSION " -- by Mega-Mario\n");
 	
 	for (;;)
 	{

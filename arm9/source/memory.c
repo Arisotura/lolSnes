@@ -78,8 +78,10 @@ char Mem_SRAMPath[256] DTCM_BSS;
 // this table in one of the CPU registers
 //
 // table[-1] -> SRAM dirty flag
-u32 _Mem_PtrTable[0x1 + 0x800] DTCM_BSS;
+// table[-2] -> HBlank/VBlank flags
+u32 _Mem_PtrTable[(MEMSTATUS_SIZE >> 2) + 0x800] DTCM_BSS;
 u32* Mem_PtrTable DTCM_BSS;
+Mem_StatusData* Mem_Status;
 
 IPCStruct* IPC;
 
@@ -407,8 +409,11 @@ void Mem_Reset()
 		fclose(sram);
 	}
 		
-	Mem_PtrTable = &_Mem_PtrTable[0x1];
-	Mem_PtrTable[-0x1] = 0;
+	Mem_Status = &_Mem_PtrTable[0];
+	Mem_PtrTable = &_Mem_PtrTable[MEMSTATUS_SIZE >> 2];
+	
+	Mem_Status->SRAMDirty = 0;
+	Mem_Status->HVBFlags = 0x00;
 	
 	for (b = 0; b < 0x40; b++)
 	{
@@ -500,14 +505,14 @@ void Mem_Reset()
 
 void Mem_SaveSRAM()
 {
-	if (!Mem_PtrTable[-0x1])
+	if (!Mem_Status->SRAMDirty)
 		return;
 	
 	FILE* sram = fopen(Mem_SRAMPath, "r+");
 	if (sram)
 	{
 		iprintf("SRAM save\n");
-		Mem_PtrTable[-0x1] = 0;
+		Mem_Status->SRAMDirty = 0;
 		fseek(sram, 0, SEEK_SET);
 		fwrite(Mem_SRAM, Mem_SRAMMask+1, 1, sram);
 		fclose(sram);
@@ -625,11 +630,15 @@ u8 Mem_GIORead8(u32 addr)
 	switch (addr)
 	{
 		case 0x10:
-			//iprintf("!! READ 4210 -- ACK NMI\n");
+			if (Mem_Status->HVBFlags & 0x20)
+			{
+				ret = 0x80;
+				Mem_Status->HVBFlags &= 0xDF;
+			}
 			break;
 			
 		case 0x12:
-			ret = Mem_HVBJOY;
+			ret = Mem_Status->HVBFlags & 0xC0;
 			break;
 			
 		case 0x14:

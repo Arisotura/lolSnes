@@ -80,8 +80,12 @@ SPC_UpdateMemMap:
 	ldrneb r0, [memory, \addr]
 	bne 1f
 	@ speedhack: when reading timer values, eat cycles
-	cmp r0, #0xFD
-	movge spcCycles, #0
+	@cmp \addr, #0xFD
+	@blt 2f
+	@cmp \addr, #0xFF
+	@subeq spcCycles, spcCycles, #0x4
+	@subne spcCycles, spcCycles, #0x20
+2:
 	.ifnc \addr, r0
 		mov r0, \addr
 	.endif
@@ -271,8 +275,10 @@ OpTableStart:
 
 
 @ add cycles
+@ must be called right before returning from the opcode handler
 .macro AddCycles num, cond=
-	sub\cond spcCycles, spcCycles, #\num
+	@sub\cond spcCycles, spcCycles, #\num
+	mov\cond r3, #\num
 .endm
 
 
@@ -315,35 +321,32 @@ SPC_Run:
 	LoadRegs
 	
 frameloop:
-		add spcCycles, spcCycles, #0x20
+		@add spcCycles, spcCycles, #0x20
+		add spcCycles, spcCycles, #0x200
 		
-		ldr r0, =itercount
-		ldr r1, [r0]
-		add r1, r1, #1
-		str r1, [r0]
-		tst r1, #0x3
-		ldr r0, =0x04000100
-		ldr r1, =0x0000FBE9
-		ldr r2, =0x0000FDF5
-		subeq r1, r1, #1
-		subeq r2, r2, #2
-		strh r1, [r0]
-		str r2, [r0, #0x308]
+		@ldr r0, =itercount
+		@ldr r1, [r0]
+		@add r1, r1, #1
+		@str r1, [r0]
+		@tst r1, #0x3
+		@ldr r0, =0x04000100
+		@ldr r1, =0x0000FBE9
+		@ldr r2, =0x0000FDF5
+		@subeq r1, r1, #1
+		@subeq r2, r2, #2
+		@strh r1, [r0]
+		@str r2, [r0, #0x308]
 		
+bigemuloop:
 		stmdb sp!, {spcCycles}
 			
 emuloop:
-			stmdb sp!, {spcCycles}
-
 			Prefetch8
-			ldr r0, [opTable, r0, lsl #0x2]
-			bx r0
+			ldr pc, [opTable, r0, lsl #0x2]
 op_return:
 			
-			@ timers emulation
+			@ timer 2
 		
-			ldmia sp!, {r3}
-			sub r3, r3, spcCycles
 			ldr r12, =SPC_Timers
 			ldrb r0, [r12]
 			
@@ -368,11 +371,17 @@ op_return:
 			strb r1, [r12, #12]
 
 noTimer2:
-			cmp spcCycles, #1
-			bge emuloop
+			@cmp spcCycles, #1
+			@bge emuloop
+			sub spcCycles, spcCycles, r3
+			ldr r3, [sp]
+			sub r3, r3, spcCycles
+			cmp r3, #0x20
+			blt emuloop
 			
-		ldmia sp!, {r3}
-		sub r3, r3, spcCycles
+		@ timers 0 and 1
+		
+		add sp, sp, #0x4
 		ldr r12, =SPC_Timers
 		ldrb r0, [r12]
 		
@@ -418,12 +427,14 @@ noTimer0:
 		strb r1, [r12, #8]
 		
 noTimer1:
+		cmp spcCycles, #1
+		bge bigemuloop
 			
 		@bl DSP_Mix
 		
-		@ wait for timer 0
-		mov r0, #1
-		mov r1, #0x00000008
+		@ wait for timer 1
+		mov r0, #0
+		mov r1, #0x00000010
 		swi #0x40000
 		
 		b frameloop
@@ -1481,7 +1492,7 @@ OP_JMP_a_X:
 	MemRead16
 	SetPC r0
 	AddCycles 6
-	bl SPC_ApplySpeedHacks
+	@bl SPC_ApplySpeedHacks
 	b op_return
 	
 OP_JMP_a:

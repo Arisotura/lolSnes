@@ -744,34 +744,32 @@ no_virq:
 			
 emuloop:
 				OpcodePrefetch8
-				ldr r0, [opTable, r0, lsl #0x2]
-				bx r0
+				ldr pc, [opTable, r0, lsl #0x2]
 op_return:
 
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start
 				@ (who cares if the HBlank end is one pixel off)
 				cmp snesCycles, #0x10C0000
-				ldr r0, =Mem_HVBJOY
-				ldrb r1, [r0]
+				ldrb r1, [memoryMap, #-0x5]
 				orrle r1, r1, #0x40
 				bicgt r1, r1, #0x40
-				strb r1, [r0]
+				strb r1, [memoryMap, #-0x5]
 				
 				cmp snesCycles, #0x00010000
 				bge emuloop
 				
 emulate_hardware:
-			ldr r0, =Mem_HVBJOY
-			ldrb r2, [r0]
+			ldrb r2, [memoryMap, #-0x5]
 			mov r1, snesCycles, lsl #0x10
 			
 			cmp r1, #0xE00000
 			orrge r2, r2, #0x80
-			strgeb r2, [r0]
+			orreq r2, r2, #0x20
+			strgeb r2, [memoryMap, #-0x5]
 			bge vblank
-			bic r2, r2, #0x80
-			strb r2, [r0]
+			bic r2, r2, #0xA0
+			strb r2, [memoryMap, #-0x5]
 			b newline
 			
 vblank:

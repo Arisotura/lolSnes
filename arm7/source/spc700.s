@@ -432,10 +432,10 @@ noTimer1:
 			
 		@bl DSP_Mix
 		
-		@ wait for timer 1
+		@ wait for timer 0
 		@ (do not wait if we missed the IRQ)
 		mov r0, #0
-		mov r1, #0x00000010
+		mov r1, #0x00000008
 		swi #0x40000
 		
 		b frameloop

@@ -58,19 +58,12 @@ int main()
 	for (i = 0; i < 64; i += 4)
 		*dst++ = *src++;
 	
-	// set timer 0 to run at ~32000Hz
-	// (reload value will be compensated every 128 cycles)
+	// set timer 0 to run at ~2000Hz
+	// (16 samples are mixed each time)
 	irqEnable(IRQ_TIMER0);
-	*(vu16*)0x04000100 = 0xFBE9;
+	*(vu16*)0x04000100 = 0xBEA0;
 	*(vu16*)0x04000102 = 0x00C0;
-	//irqSet(IRQ_TIMER0, DSP_Mix);
-	
-	// set timer 1 to cascade from timer 0
-	// mix 16 samples worth of audio every 512 cycles
-	irqEnable(IRQ_TIMER1);
-	*(vu16*)0x04000104 = 0xFFF0;
-	*(vu16*)0x04000106 = 0x00C4;
-	irqSet(IRQ_TIMER1, DSP_Mix);
+	irqSet(IRQ_TIMER0, DSP_Mix);
 
 	for (;;)
 	{

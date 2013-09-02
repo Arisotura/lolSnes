@@ -233,7 +233,7 @@ OpTableStart:
 	.long OP_CLRC, OP_UNK, OP_SET3, OP_BBS_3, OP_CMP_A_DP, OP_CMP_A_mImm, OP_UNK, OP_CMP_A_m_X	@6
 	.long OP_CMP_A_Imm, OP_CMP_DP_DP, OP_UNK, OP_ROR_DP, OP_ROR_lm, OP_PUSH_Y, OP_DBNZ_DP, OP_RET
 	.long OP_BVS, OP_UNK, OP_CLR3, OP_BBC_3, OP_CMP_A_DP_X, OP_CMP_A_mImm_X, OP_CMP_A_mImm_Y, OP_CMP_A_m_Y	@7
-	.long OP_CMP_DP_Imm, OP_CMP_mX_mY, OP_ADDW_YA_DP, OP_ROR_DP_X, OP_ROR_A, OP_MOV_A_X, OP_CMP_Y_DP, OP_UNK
+	.long OP_CMP_DP_Imm, OP_CMP_mX_mY, OP_ADDW_YA_DP, OP_ROR_DP_X, OP_ROR_A, OP_MOV_A_X, OP_CMP_Y_DP, OP_RET1
 	.long OP_SETC, OP_UNK, OP_SET4, OP_BBS_4, OP_ADC_A_DP, OP_ADC_A_lm, OP_ADC_A_mX, OP_ADC_A_m_X	@8
 	.long OP_ADC_A_Imm, OP_ADC_DP_DP, OP_UNK, OP_DEC_DP, OP_DEC_lm, OP_MOV_Y_Imm, OP_POP_P, OP_MOV_DP_Imm
 	.long OP_BCC, OP_UNK, OP_CLR4, OP_BBC_4, OP_ADC_A_DP_X, OP_ADC_A_lm_X, OP_ADC_A_lm_Y, OP_ADC_A_m_Y	@9
@@ -2036,12 +2036,22 @@ OP_PUSH_Y:
 	AddCycles 4
 	b op_return
 	
-@ --- RET ---------------------------------------------------------------------
+@ --- RETx --------------------------------------------------------------------
 
 OP_RET:
 	StackRead16
 	SetPC
 	AddCycles 5
+	b op_return
+	
+OP_RET1:
+	StackRead8
+	bic spcPSW, spcPSW, #0xFF
+	and r0, r0, #0xFF
+	orr spcPSW, spcPSW, r0
+	StackRead16
+	SetPC
+	AddCycles 6
 	b op_return
 	
 @ --- ROL ---------------------------------------------------------------------

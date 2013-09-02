@@ -78,14 +78,14 @@ PPU_VRAMBlock PPU_VRAMMap[32];
 // mode 4:	256/4		64k/64k				128k
 // mode 5:	16/4		64k/64k				128k
 // mode 6:	16			64k					64k
-// mode 7:	256			64k					64k (may not be right)
+// mode 7:	256			32k tileset+tilemap
 
 // OBJ: max size = 64x64 -> 64 tiles
 // max tiles: 512 -> 16k bytes
 // (allocate more OBJ for some workarounds)
 
 // VRAM ALLOCATION
-// 0x06040000 : bank D: BG scr data
+// 0x06040000 : bank D: BG scr data, mode7 graphics
 // 0x06000000 : bank A/B: BG chr data
 // 0x06400000 : bank E: OBJ chr data
 // bank F/G: BG ext palettes
@@ -155,6 +155,9 @@ u8 PPU_SpriteSize[16] =
 	8, 16, 32, 64,
 	16, 32, 32, 64
 };
+
+
+u32 Mem_WRAMAddr;
 
 
 void PPU_Reset()
@@ -234,6 +237,9 @@ void PPU_Reset()
 	
 	for (i = 0; i < 4*128; i++)
 		PPU_OBJList[i] = 0;
+		
+		
+	Mem_WRAMAddr = 0;
 		
 	
 	// allocate VRAM
@@ -914,6 +920,8 @@ u8 PPU_Read8(u32 addr)
 		case 0x41: ret = IPC->SPC_IOPorts[5]; break;
 		case 0x42: ret = IPC->SPC_IOPorts[6]; break;
 		case 0x43: ret = IPC->SPC_IOPorts[7]; break;
+		
+		case 0x80: ret = Mem_SysRAM[Mem_WRAMAddr++]; break;
 	}
 	
 	asm("ldmia sp!, {r2-r3, r12}");
@@ -1166,6 +1174,11 @@ void PPU_Write8(u32 addr, u8 val)
 		case 0x41: IPC->SPC_IOPorts[1] = val; break;
 		case 0x42: IPC->SPC_IOPorts[2] = val; break;
 		case 0x43: IPC->SPC_IOPorts[3] = val; break;
+		
+		case 0x80: Mem_SysRAM[Mem_WRAMAddr++] = val; break;
+		case 0x81: Mem_WRAMAddr = (Mem_WRAMAddr & 0x0001FF00) | val; break;
+		case 0x82: Mem_WRAMAddr = (Mem_WRAMAddr & 0x000100FF) | (val << 8); break;
+		case 0x83: Mem_WRAMAddr = (Mem_WRAMAddr & 0x0000FFFF) | ((val & 0x01) << 16); break;
 				
 		default:
 			//iprintf("PPU_Write8(%08X, %08X)\n", addr, val);
@@ -1192,6 +1205,8 @@ void PPU_Write16(u32 addr, u16 val)
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;
+		
+		case 0x81: Mem_WRAMAddr = (Mem_WRAMAddr & 0x00010000) | val; break;
 		
 		// otherwise, just do two 8bit writes
 		default:

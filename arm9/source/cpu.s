@@ -642,6 +642,7 @@ irq_nostack:
 	bic snesPBR, snesPBR, #0xFF
 	ldr r0, =ROM_Bank0End
 	ldr r0, [r0]
+	tst snesP, #flagE
 	subeq r0, r0, #vec_e0_IRQ
 	subne r0, r0, #vec_e1_IRQ
 	ldrh r0, [r0]
@@ -675,6 +676,7 @@ nmi_nostack:
 	bic snesPBR, snesPBR, #0xFF
 	ldr r0, =ROM_Bank0End
 	ldr r0, [r0]
+	tst snesP, #flagE
 	subeq r0, r0, #vec_e0_NMI
 	subne r0, r0, #vec_e1_NMI
 	ldrh r0, [r0]

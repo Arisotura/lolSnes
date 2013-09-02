@@ -47,6 +47,8 @@ int ROM_CacheBank[2 + ROMCACHE_SIZE] DTCM_BSS;
 u8 ROM_CacheIndex DTCM_BSS;
 int ROM_CacheInited = 0;
 
+u32 ROM_FileOffset;
+
 //void (*ROM_CacheCode)(u32 bank) DTCM_BSS;
 //void (*ROM_CacheData)(u32 bank) DTCM_BSS;
 
@@ -481,6 +483,8 @@ void Mem_Reset()
 	
 	ROM_ApplySpeedHacks();
 	
+	ROM_FileOffset = 0;
+	
 	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
 	
 	// get uncached address
@@ -531,8 +535,14 @@ ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 
 	if (fileaddr < ROM_FileSize)
 	{
-		fseek(ROM_File, fileaddr, SEEK_SET);
+		if (fileaddr != ROM_FileOffset)
+		{
+			ROM_FileOffset = fileaddr;
+			fseek(ROM_File, fileaddr, SEEK_SET);
+		}
+		
 		fread(&ROM_ReadBuffer, 1, 1, ROM_File);
+		ROM_FileOffset++;
 	}
 	else
 		ROM_ReadBuffer = 0;
@@ -547,8 +557,14 @@ ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
 
 	if (fileaddr < ROM_FileSize)
 	{
-		fseek(ROM_File, fileaddr, SEEK_SET);
+		if (fileaddr != ROM_FileOffset)
+		{
+			ROM_FileOffset = fileaddr;
+			fseek(ROM_File, fileaddr, SEEK_SET);
+		}
+		
 		fread(&ROM_ReadBuffer, 2, 1, ROM_File);
+		ROM_FileOffset += 2;
 	}
 	else
 		ROM_ReadBuffer = 0;
@@ -563,8 +579,14 @@ ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
 
 	if (fileaddr < ROM_FileSize)
 	{
-		fseek(ROM_File, fileaddr, SEEK_SET);
+		if (fileaddr != ROM_FileOffset)
+		{
+			ROM_FileOffset = fileaddr;
+			fseek(ROM_File, fileaddr, SEEK_SET);
+		}
+		
 		fread(&ROM_ReadBuffer, 3, 1, ROM_File);
+		ROM_FileOffset += 3;
 	}
 	else
 		ROM_ReadBuffer = 0;
@@ -767,6 +789,7 @@ u8 Mem_Read8(u32 addr)
 	{
 		if (ptr & MPTR_READONLY)
 		{
+			ptr &= 0x0FFFFFFF;
 			ptr += (addr & 0x1FFF);
 			return Mem_ROMRead8(ptr);
 		}
@@ -787,6 +810,7 @@ u16 Mem_Read16(u32 addr)
 	{
 		if (ptr & MPTR_READONLY)
 		{
+			ptr &= 0x0FFFFFFF;
 			ptr += (addr & 0x1FFF);
 			return Mem_ROMRead16(ptr);
 		}

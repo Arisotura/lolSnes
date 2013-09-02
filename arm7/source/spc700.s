@@ -215,7 +215,7 @@ SPC_UpdateMemMap:
 	orr \dst, \dst, r3, lsl #0x8
 .endm
 
-@ --- Opcode tables -----------------------------------------------------------
+@ --- Opcode table ------------------------------------------------------------
 
 OpTableStart:
 	.long OP_NOP, OP_UNK, OP_SET0, OP_BBS_0, OP_OR_A_DP, OP_OR_A_lm, OP_OR_A_mX, OP_OR_A_m_Y	@0

@@ -69,6 +69,11 @@ u16 Mem_GIORead16(u32 addr);
 void Mem_GIOWrite8(u32 addr, u8 val);
 void Mem_GIOWrite16(u32 addr, u16 val);
 
+u8 Mem_JoyRead8(u32 addr);
+u16 Mem_JoyRead16(u32 addr);
+void Mem_JoyWrite8(u32 addr, u8 val);
+void Mem_JoyWrite16(u32 addr, u16 val);
+
 u8 DMA_Read8(u32 addr);
 u16 DMA_Read16(u32 addr);
 void DMA_Write8(u32 addr, u8 val);

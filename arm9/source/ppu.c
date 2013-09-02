@@ -157,6 +157,13 @@ u8 PPU_SpriteSize[16] =
 };
 
 
+u16 PPU_M7Old;
+
+s16 PPU_MulA;
+s8 PPU_MulB;
+s32 PPU_MulResult;
+
+
 u32 Mem_WRAMAddr;
 
 
@@ -237,6 +244,11 @@ void PPU_Reset()
 	
 	for (i = 0; i < 4*128; i++)
 		PPU_OBJList[i] = 0;
+		
+	PPU_M7Old = 0;
+	PPU_MulA = 0;
+	PPU_MulB = 0;
+	PPU_MulResult = 0;
 		
 		
 	Mem_WRAMAddr = 0;
@@ -894,6 +906,10 @@ u8 PPU_Read8(u32 addr)
 			}
 			break;
 			
+		case 0x34: ret = PPU_MulResult & 0xFF; break;
+		case 0x35: ret = (PPU_MulResult >> 8) & 0xFF; break;
+		case 0x36: ret = (PPU_MulResult >> 16) & 0xFF; break;
+			
 		case 0x38:
 			ret = PPU_OAM[PPU_OAMAddr];
 			PPU_OAMAddr++;
@@ -1121,6 +1137,21 @@ void PPU_Write8(u32 addr, u8 val)
 				if (PPU_VRAMInc & 0x80)
 					PPU_VRAMAddr += PPU_VRAMStep;
 			}
+			break;
+			
+		case 0x1B: // multiply
+			if (PPU_M7Old & 0x8000)
+			{
+				PPU_MulA = (s16)((PPU_M7Old & 0xFF) | (val << 8));
+				PPU_M7Old = 0;
+				PPU_MulResult = (s32)PPU_MulA * (s32)PPU_MulB;
+			}
+			else
+				PPU_M7Old = 0x8000 | val;
+			break;
+		case 0x1C:
+			PPU_MulB = (s8)val;
+			PPU_MulResult = (s32)PPU_MulA * (s32)PPU_MulB;
 			break;
 			
 		case 0x21:

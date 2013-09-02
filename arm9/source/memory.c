@@ -483,7 +483,7 @@ void Mem_Reset()
 	
 	ROM_ApplySpeedHacks();
 	
-	ROM_FileOffset = 0;
+	ROM_FileOffset = -1;
 	
 	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
 	
@@ -773,10 +773,53 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 	
 	switch (addr)
 	{
+		case 0x04:
+			Mem_DivA = val;
+			break;
+			
 		case 0x09:
 			Mem_VMatch = val;
 			break;
 	}
+	
+	asm("ldmia sp!, {r12}");
+}
+
+
+u8 Mem_JoyRead8(u32 addr)
+{
+	asm("stmdb sp!, {r12}");
+	
+	u8 ret = 0;
+	
+	//iprintf("joy read8 %02X\n", addr);
+	
+	asm("ldmia sp!, {r12}");
+	return ret;
+}
+
+u16 Mem_JoyRead16(u32 addr)
+{
+	asm("stmdb sp!, {r12}");
+	
+	u16 ret = 0;
+	
+	//iprintf("joy read16 %02X\n", addr);
+	
+	asm("ldmia sp!, {r12}");
+	return ret;
+}
+
+void Mem_JoyWrite8(u32 addr, u8 val)
+{
+	asm("stmdb sp!, {r12}");
+	
+	asm("ldmia sp!, {r12}");
+}
+
+void Mem_JoyWrite16(u32 addr, u16 val)
+{
+	asm("stmdb sp!, {r12}");
 	
 	asm("ldmia sp!, {r12}");
 }

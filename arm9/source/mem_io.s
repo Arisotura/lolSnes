@@ -45,6 +45,10 @@ Mem_IORead8:
 	cmp r1, #0x4300
 	beq DMA_Read8
 	
+	cmp r1, #0x4000
+	subeq snesCycles, snesCycles, #0x60000
+	beq Mem_JoyRead8
+	
 	mov r0, #0
 	bx lr
 	
@@ -61,6 +65,10 @@ Mem_IORead16:
 	cmp r1, #0x4300
 	beq DMA_Read16
 	
+	cmp r1, #0x4000
+	subeq snesCycles, snesCycles, #0xC0000
+	beq Mem_JoyRead16
+	
 	mov r0, #0
 	bx lr
 	
@@ -73,6 +81,10 @@ Mem_IOWrite8:
 	
 	cmp r2, #0x4300
 	beq DMA_Write8
+	
+	cmp r2, #0x4000
+	subeq snesCycles, snesCycles, #0x60000
+	beq Mem_JoyWrite8
 	
 	cmp r2, #0x4200
 	bxne lr
@@ -95,6 +107,10 @@ Mem_IOWrite16:
 	
 	cmp r2, #0x4300
 	beq DMA_Write16
+	
+	cmp r2, #0x4000
+	subeq snesCycles, snesCycles, #0x60000
+	beq Mem_JoyWrite16
 	
 	cmp r2, #0x4200
 	bxne lr

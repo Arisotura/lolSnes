@@ -782,6 +782,18 @@ vblank:
 			blt newline
 			
 		sub snesCycles, snesCycles, r3, lsl #0x1
+		
+		@ causes glitches when running < 60fps
+		@ (vblank handler should be called directly if no vblank, but then
+		@ what about writing to graphics stuff outside of vblank?)
+		@ldr r3, =0x0B003FF8
+		@ldr r0, [r3]
+		@tst r0, #0x00000001
+		@swieq #0x50000
+		@ldr r0, [r3]
+		@bic r0, #0x00000001
+		@str r0, [r3]
+		
 		swi #0x50000
 		b frameloop
 		

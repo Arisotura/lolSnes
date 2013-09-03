@@ -320,11 +320,11 @@ void PPU_UploadBGPal(int nbg, bool domap)
 			dst += (240 >> 1);
 		}
 	}
-	else
+	else if (bg->ColorDepth == 256)
 	{
-		/*int i;
+		int i;
 		for (i = 0; i < 256; i += 2)
-			*dst++ = *src++;*/
+			*dst++ = *src++;
 	}
 	
 	if (domap)

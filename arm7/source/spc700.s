@@ -81,10 +81,7 @@ SPC_UpdateMemMap:
 	bne 1f
 	@ speedhack: when reading timer values, eat cycles
 	@cmp \addr, #0xFD
-	@blt 2f
-	@cmp \addr, #0xFF
-	@subeq spcCycles, spcCycles, #0x4
-	@subne spcCycles, spcCycles, #0x20
+	@orrge spcPSW, spcPSW, #flagT1
 2:
 	.ifnc \addr, r0
 		mov r0, \addr
@@ -324,23 +321,17 @@ frameloop:
 		@add spcCycles, spcCycles, #0x20
 		add spcCycles, spcCycles, #0x200
 		
-		@ldr r0, =itercount
-		@ldr r1, [r0]
-		@add r1, r1, #1
-		@str r1, [r0]
-		@tst r1, #0x3
-		@ldr r0, =0x04000100
-		@ldr r1, =0x0000FBE9
-		@ldr r2, =0x0000FDF5
-		@subeq r1, r1, #1
-		@subeq r2, r2, #2
-		@strh r1, [r0]
-		@str r2, [r0, #0x308]
-		
 bigemuloop:
 		stmdb sp!, {spcCycles}
 			
 emuloop:
+			@tst spcPSW, #flagT1
+			@beq nospeedhax
+			@tst spcPSW, #flagT2
+			@orreq spcPSW, spcPSW, #flagT2
+			@bicne spcPSW, spcPSW, #(flagT1|flagT2)
+nospeedhax:
+			
 			Prefetch8
 			ldr pc, [opTable, r0, lsl #0x2]
 op_return:
@@ -839,6 +830,8 @@ OP_ASL_Imm:
 			bne 1f
 		.endif
 			add spcPC, spcPC, #0x10000
+			@tst spcPSW, #flagT1
+			@AddCycles 128, ne
 			AddCycles \cnb
 			b op_return
 1:

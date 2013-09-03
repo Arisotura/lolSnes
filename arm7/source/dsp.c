@@ -35,6 +35,12 @@ u32 DSP_CurSample = 0;
 
 #define DSP_BRRTable ((s16*)0x0601FE00)
 
+// BRR cache:
+// start: 06012040
+// end:   0601FA00
+// size:  D9C0
+// 1639*34 (1639 blocks)
+
 extern int itercount;
 
 typedef struct
@@ -159,9 +165,11 @@ s32 DSP_BRRFilter3(s32 samp, DSP_Voice* voice)
 }
 
 s32 (*DSP_BRRFilters[4])(u32, DSP_Voice*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };*/
-
+u32 brrtime = 0;
 void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 {
+	//*(vu32*)0x0400010C = 0x00800000;
+	
 	register u8* data = &SPC_RAM[voice->CurAddr];
 	register s32* dst = &voice->CurBlockSamples[0];
 	
@@ -210,6 +218,9 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 	voice->CurAddr += 9;
 	
 	if (blockval & 0x01) DSP_Regs[0x7C] |= (1 << nv);
+	
+	//brrtime += *(vu16*)0x0400010C;
+	//*(vu32*)0x0400010C = 0x00000000;
 }
 u32 maxtime = 0;
 void DSP_Mix()
@@ -220,6 +231,9 @@ void DSP_Mix()
 	//*(vu32*)0x0400010C = 0x00840000;
 	//*(vu32*)0x04000108 = 0x00800000;
 	// benchmark end
+	
+	//brrtime = 0;
+	//*(vu32*)0x04000108 = 0x00800000;
 	
 	register int spos = DSP_CurSample;
 	for (i = 0; i < SAMPLES_PER_ITER; i += 2)
@@ -299,6 +313,9 @@ void DSP_Mix()
 	//u32 timer = timer_low | (timer_high << 16);
 	//if (timer > maxtime) { maxtime = timer; spcPrintf("mixer time: %d cycles\n", timer); }
 	// benchmark end
+	//u16 mixtime = *(vu16*)0x04000108;
+	//*(vu32*)0x04000108 = 0x00000000;
+	//if (mixtime > 1000) spcPrintf("mixer: %d | BRR: %d\n", mixtime, brrtime);
 }
 
 

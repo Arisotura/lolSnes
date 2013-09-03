@@ -39,6 +39,8 @@ memory			.req r4		@ pointer to the memory
 .equ flagV, 0x40
 .equ flagN, 0x80
 .equ flagR, 0x100	@ ROM access flag (0 = RAM, 1 = ROM)
+.equ flagT1, 0x200	@ set right after a timer read, cleared otherwise (used for speedhacks)
+.equ flagT2, 0x400	@ acknowledges flagT1
 
 .equ flagNVHZC, 0xCB
 .equ flagNVZC,  0xC3

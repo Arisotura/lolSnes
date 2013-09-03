@@ -41,6 +41,49 @@ u32 DSP_CurSample = 0;
 // size:  D9C0
 // 1639*34 (1639 blocks)
 
+// compressed Gauss table
+// 0XXX: copy value XXX once
+// 80XX: repeat following value X times
+// 4XYY: repeat following value X times, then increment, do that Y times
+// 2XYY: increment following value by X, do that Y times
+// FFFF: stop
+u16 comp_gauss[] = 
+{
+	0x8010, 0x0000, 0x800B, 0x0001, 0x8007, 0x0002, 0x8005, 0x0003, 
+	0x8005, 0x0004, 0x8004, 0x0005, 0x8004, 0x0006, 0x8003, 0x0007, 
+	0x8003, 0x0008, 0x8003, 0x0009, 0x8003, 0x000A, 0x8003, 0x000B, 
+	0x4203, 0x000C, 0x8003, 0x000F, 0x4202, 0x0010, 0x0012, 0x4203, 
+	0x0013, 0x0016, 0x4202, 0x0017, 0x0019, 0x001A, 0x001B, 0x001B,  
+	0x001C, 0x001D, 0x001D, 0x001E, 0x001F, 0x0020, 0x2105, 0x0020, 
+	0x2115, 0x0024, 0x2105, 0x003A, 0x2104, 0x0040, 0x2103, 0x0045, 
+	0x0049, 0x004A, 0x2103, 0x004C, 0x0050, 0x0051, 0x0053, 0x0054, 
+	0x0056, 0x0057, 0x0059, 0x005A, 0x005C, 0x005E, 0x2203, 0x005F, 
+	0x2204, 0x0064, 0x2206, 0x006B, 0x2209, 0x0076, 0x2206, 0x0089, 
+	0x2204, 0x0096, 0x2203, 0x009F, 0x00A6, 0x00A8, 0x2203, 0x00AB, 
+	0x00B2, 0x00B4, 0x00B7, 0x00BA, 0x00BC, 0x00BF, 0x2303, 0x00C1, 
+	0x2304, 0x00C9, 0x2312, 0x00D4, 0x2304, 0x010B, 0x2303, 0x0118, 
+	0x0122, 0x0125, 0x0129, 0x012C, 0x0130, 0x0133, 0x0137, 0x013A, 
+	0x013E, 0x0141, 0x0145, 0x0148, 0x014C, 0x0150, 0x0153, 0x0157, 
+	0x015B, 0x015F, 0x2407, 0x0162, 0x2407, 0x017D, 0x2407, 0x019A, 
+	0x2404, 0x01B7, 0x2403, 0x01C8, 0x2403, 0x01D5, 0x01E2, 0x01E6, 
+	0x2403, 0x01EB, 0x01F8, 0x01FC, 0x0201, 0x2503, 0x0205, 0x0213, 
+	0x0218, 0x2503, 0x021C, 0x022A, 0x022F, 0x2503, 0x0233, 0x2504, 
+	0x0241, 0x2504, 0x0254, 0x2506, 0x0267, 0x2507, 0x0284, 0x250B, 
+	0x02A6, 0x250F, 0x02DC, 0x250A, 0x0326, 0x2506, 0x0357, 0x2505, 
+	0x0374, 0x2504, 0x038C, 0x2503, 0x039F, 0x2503, 0x03AD, 0x2503, 
+	0x03BB, 0x03C9, 0x03CE, 0x2503, 0x03D2, 0x03E0, 0x2403, 0x03E5, 
+	0x03F2, 0x03F6, 0x2403, 0x03FB, 0x2403, 0x0408, 0x2405, 0x0415, 
+	0x042A, 0x240A, 0x042E, 0x2405, 0x0455, 0x2403, 0x0468, 0x0473, 
+	0x0477, 0x047A, 0x047E, 0x0481, 0x0485, 0x0488, 0x048C, 0x048F, 
+	0x0492, 0x0496, 0x2304, 0x0499, 0x2306, 0x04A6, 0x2305, 0x04B7, 
+	0x2303, 0x04C5, 0x04CD, 0x04D0, 0x04D2, 0x2203, 0x04D5, 0x2203, 
+	0x04DC, 0x220A, 0x04E3, 0x2203, 0x04F6, 0x2203, 0x04FB, 0x0500, 
+	0x2103, 0x0502, 0x2103, 0x0506, 0x2108, 0x050A, 0x2104, 0x0511, 
+	0x2103, 0x0514, 0x0516, 0x8003, 0x0517, 0x8005, 0x0518, 0x0519, 
+	0x0519, 0xFFFF
+};
+#define DSP_GaussTable ((s16*)0x0601FA00)
+
 extern int itercount;
 
 typedef struct
@@ -99,6 +142,56 @@ void DSP_Reset()
 	}
 	
 	
+	u16* gsrc = &comp_gauss[0];
+	u16* gdst = &DSP_GaussTable[0];
+	for (;;)
+	{
+		u16 val = *gsrc++;
+		if (val == 0xFFFF) break;
+		
+		u16 a = (val & 0x0F00) >> 8;
+		u16 b = val & 0xFF;
+		
+		switch (val & 0xF000)
+		{
+			case 0x0000:
+				*gdst++ = val;
+				break;
+			
+			case 0x8000:
+				{
+					u16 rep = *gsrc++;
+					for (i = 0; i < b; i++)
+						*gdst++ = rep;
+				}
+				break;
+				
+			case 0x4000:
+				{
+					u16 rep = *gsrc++;
+					for (i = 0; i < b; i++)
+					{
+						u16 j;
+						for (j = 0; j < a; j++)
+							*gdst++ = rep;
+						rep++;
+					}
+				}
+				break;
+				
+			case 0x2000:
+				{
+					u16 rep = *gsrc++;
+					for (i = 0; i < b; i++)
+					{
+						*gdst++ = rep;
+						rep += a;
+					}
+				}
+				break;
+		}
+	}
+	
 	for (i = 0; i < 256; i++)
 	{
 		int shift = i >> 4;
@@ -149,7 +242,7 @@ inline s32 DSP_Clamp(s32 val)
 	return val;
 }
 
-/*s32 DSP_BRRFilter1(s32 samp, DSP_Voice* voice)
+s32 DSP_BRRFilter1(s32 samp, DSP_Voice* voice)
 {
 	return samp + voice->OldSamp + ((-voice->OldSamp) >> 4);
 }
@@ -164,7 +257,8 @@ s32 DSP_BRRFilter3(s32 samp, DSP_Voice* voice)
 	return samp + (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4);
 }
 
-s32 (*DSP_BRRFilters[4])(u32, DSP_Voice*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };*/
+s32 (*DSP_BRRFilters[4])(u32, DSP_Voice*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };
+
 u32 brrtime = 0;
 void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 {
@@ -173,9 +267,9 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 	register u8* data = &SPC_RAM[voice->CurAddr];
 	register s32* dst = &voice->CurBlockSamples[0];
 	
-	u8 blockval = *data++;
-	u8 shift = blockval & 0xF0;
-	//s32 (*brrfilter)(s32, DSP_Voice*) = DSP_BRRFilters[(blockval & 0x0C) >> 2];
+	register u8 blockval = *data++;
+	register u8 shift = blockval & 0xF0;
+	register s32 (*brrfilter)(s32, DSP_Voice*) = DSP_BRRFilters[(blockval & 0x0C) >> 2];
 	
 	int i;
 	for (i = 8; i > 0; i--)
@@ -184,14 +278,14 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 		
 		s32 samp = (s32)DSP_BRRTable[(byte >> 4) | shift];
 		
-		switch (blockval & 0x0C)
+		/*switch (blockval & 0x0C)
 		{
 			case 0x00: break;
 			case 0x04: samp += voice->OldSamp + ((-voice->OldSamp) >> 4); break;
 			case 0x08: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 3) >> 5) - voice->OlderSamp + (voice->OlderSamp >> 4); break;
 			case 0x0C: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4); break;
-		}
-		//if (brrfilter) samp = brrfilter(samp, voice);
+		}*/
+		if (brrfilter) samp = (*brrfilter)(samp, voice);
 		//samp = DSP_Clamp(samp >> 1) << 1;
 		
 		*dst++ = samp;
@@ -200,14 +294,14 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 		
 		samp = (s32)DSP_BRRTable[(byte & 0x0F) | shift];
 		
-		switch (blockval & 0x0C)
+		/*switch (blockval & 0x0C)
 		{
 			case 0x00: break;
 			case 0x04: samp += voice->OldSamp + ((-voice->OldSamp) >> 4); break;
 			case 0x08: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 3) >> 5) - voice->OlderSamp + (voice->OlderSamp >> 4); break;
 			case 0x0C: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4); break;
-		}
-		//if (brrfilter) samp = brrfilter(samp, voice);
+		}*/
+		if (brrfilter) samp = (*brrfilter)(samp, voice);
 		//samp = DSP_Clamp(samp >> 1) << 1;
 		
 		*dst++ = samp;
@@ -243,10 +337,14 @@ void DSP_Mix()
 		spos += 2;
 	}
 	
+	register DSP_Voice* voice = &DSP_Voices[0];
 	for (i = 0; i < 8; i++)
 	{
-		register DSP_Voice* voice = &DSP_Voices[i];
-		if (!voice->Status) continue;
+		if (!voice->Status) 
+		{
+			voice++;
+			continue;
+		}
 		
 		register u32 pos = voice->Position;
 		register u8 blockval = voice->CurBlockVal;
@@ -297,6 +395,8 @@ void DSP_Mix()
 		}
 		
 		voice->Position = pos;
+		
+		voice++;
 	}
 	
 	/*for (i = 0; i < SAMPLES_PER_ITER; i++)

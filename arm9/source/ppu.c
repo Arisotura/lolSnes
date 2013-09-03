@@ -289,8 +289,8 @@ void PPU_UploadBGPal(int nbg, bool domap)
 			*(u8*)0x04000246 = 0x80;
 	}
 	
-	u16* src = (u16*)0x05000000;
-	u16* dst = (u16*)(BG_PAL_BASE + (nbg << 13));
+	u32* src = (u32*)0x05000000;
+	u32* dst = (u32*)(BG_PAL_BASE + (nbg << 13));
 	
 	if (bg->ColorDepth == 4)
 	{
@@ -299,10 +299,8 @@ void PPU_UploadBGPal(int nbg, bool domap)
 		{
 			*dst++ = *src++;
 			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
 			
-			dst += 252;
+			dst += (252 >> 1);
 		}
 	}
 	else if (bg->ColorDepth == 16)
@@ -318,21 +316,15 @@ void PPU_UploadBGPal(int nbg, bool domap)
 			*dst++ = *src++;
 			*dst++ = *src++;
 			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
-			*dst++ = *src++;
 			
-			dst += 240;
+			dst += (240 >> 1);
 		}
 	}
 	else
 	{
-		// TODO
+		/*int i;
+		for (i = 0; i < 256; i += 2)
+			*dst++ = *src++;*/
 	}
 	
 	if (domap)
@@ -535,6 +527,9 @@ inline void PPU_SetBGColorDepth(int nbg, int depth)
 			PPU_UploadBGPal(nbg, true);
 			PPU_UploadBGChr(nbg);
 			if (olddepth == 0) PPU_UploadBGScr(nbg);
+			
+			//if (depth == 256) *(u16*)(0x04000008 + (nbg << 1)) |= 0x0080;
+			//else *(u16*)(0x04000008 + (nbg << 1)) &= 0xFFFFFF7F;
 		}
 		else
 			bg->ChrSize = 0;
@@ -566,9 +561,16 @@ void PPU_ModeChange(u8 newmode)
 			PPU_SetBGColorDepth(2, 4);
 			PPU_SetBGColorDepth(3, 0);
 			break;
+			
+		case 3:
+			PPU_SetBGColorDepth(0, 256);
+			PPU_SetBGColorDepth(1, 16);
+			PPU_SetBGColorDepth(2, 0);
+			PPU_SetBGColorDepth(3, 0);
+			break;
 		
 		default:
-			//iprintf("unsupported PPU mode %d\n", newmode);
+			iprintf("unsupported PPU mode %d\n", newmode);
 			break;
 	}
 }

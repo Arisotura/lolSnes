@@ -24,14 +24,14 @@
 u8 DSP_Regs[0x80];
 
 // buffer size should be power of two
-// TODO buffers for left and right channels
 #define BUFFER_SIZE 2048
 //s16 DSP_Buffer[BUFFER_SIZE] ALIGN(4);
-#define DSP_Buffer ((s16*)0x06010040)
+#define DSP_LBuffer ((s16*)0x06010040)
+#define DSP_RBuffer ((s16*)(0x06010040 + (BUFFER_SIZE << 1)))
 u32 DSP_CurSample = 0;
 
 #define SAMPLES_PER_ITER 16
-s16 DSP_TempBuffer[SAMPLES_PER_ITER] ALIGN(4);
+//s16 DSP_TempBuffer[SAMPLES_PER_ITER] ALIGN(4);
 
 #define DSP_BRRTable ((s16*)0x0601FE00)
 
@@ -74,7 +74,10 @@ void DSP_Reset()
 		DSP_Regs[i] = 0;
 		
 	for (i = 0; i < BUFFER_SIZE; i++)
-		DSP_Buffer[i] = 0;
+	{
+		DSP_LBuffer[i] = 0;
+		DSP_RBuffer[i] = 0;
+	}
 	DSP_CurSample = 0;
 		
 	for (i = 0; i < 8; i++)
@@ -114,11 +117,18 @@ void DSP_Reset()
 	*(vu16*)0x04000500 = 0x807F;
 	*(vu16*)0x04000504 = 0x0200;
 	
-	*(vu32*)0x04000404 = (u32)&DSP_Buffer[0];
+	*(vu32*)0x04000404 = (u32)&DSP_LBuffer[0];
 	*(vu16*)0x04000408 = 0xFDF5;
 	*(vu16*)0x0400040A = 0x0000;
 	*(vu32*)0x0400040C = BUFFER_SIZE >> 1;
-	*(vu32*)0x04000400 = 0xA840007F;
+	
+	*(vu32*)0x04000414 = (u32)&DSP_RBuffer[0];
+	*(vu16*)0x04000418 = 0xFDF5;
+	*(vu16*)0x0400041A = 0x0000;
+	*(vu32*)0x0400041C = BUFFER_SIZE >> 1;
+	
+	*(vu32*)0x04000400 = 0xA800007F;
+	*(vu32*)0x04000410 = 0xA87F007F;
 }
 
 
@@ -133,7 +143,7 @@ inline s32 DSP_Clamp(s32 val)
 	return val;
 }
 
-s32 DSP_BRRFilter1(s32 samp, DSP_Voice* voice)
+/*s32 DSP_BRRFilter1(s32 samp, DSP_Voice* voice)
 {
 	return samp + voice->OldSamp + ((-voice->OldSamp) >> 4);
 }
@@ -148,26 +158,22 @@ s32 DSP_BRRFilter3(s32 samp, DSP_Voice* voice)
 	return samp + (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4);
 }
 
-s32 (*DSP_BRRFilters[4])(u32, DSP_Voice*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };
+s32 (*DSP_BRRFilters[4])(u32, DSP_Voice*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };*/
 
 void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 {
-	u8* data = &SPC_RAM[voice->CurAddr];
+	register u8* data = &SPC_RAM[voice->CurAddr];
+	register s32* dst = &voice->CurBlockSamples[0];
 	
 	u8 blockval = *data++;
 	u8 shift = blockval & 0xF0;
 	//s32 (*brrfilter)(s32, DSP_Voice*) = DSP_BRRFilters[(blockval & 0x0C) >> 2];
 	
 	int i;
-	for (i = 0; i < 16; i += 2)
+	for (i = 8; i > 0; i--)
 	{
 		u8 byte = *data++;
 		
-		/*s32 samp = byte >> 4;
-		if (samp & 0x8) samp |= 0xFFFFFFF0;
-		if (blockval >= 0xD0) { samp <<= 9; samp &= 0xFFFFF000; }
-		else samp <<= (blockval >> 4);
-		samp >>= 1;*/
 		s32 samp = (s32)DSP_BRRTable[(byte >> 4) | shift];
 		
 		switch (blockval & 0x0C)
@@ -180,15 +186,10 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 		//if (brrfilter) samp = brrfilter(samp, voice);
 		//samp = DSP_Clamp(samp >> 1) << 1;
 		
-		voice->CurBlockSamples[i] = samp;// >> 1;
+		*dst++ = samp;
 		voice->OlderSamp = voice->OldSamp;
 		voice->OldSamp = samp;
 		
-		/*samp = byte & 0x0F;
-		if (samp & 0x8) samp |= 0xFFFFFFF0;
-		if (blockval >= 0xD0) { samp <<= 9; samp &= 0xFFFFF000; }
-		else samp <<= (blockval >> 4);
-		samp >>= 1;*/
 		samp = (s32)DSP_BRRTable[(byte & 0x0F) | shift];
 		
 		switch (blockval & 0x0C)
@@ -201,7 +202,7 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 		//if (brrfilter) samp = brrfilter(samp, voice);
 		//samp = DSP_Clamp(samp >> 1) << 1;
 		
-		voice->CurBlockSamples[i+1] = samp;// >> 1;
+		*dst++ = samp;
 		voice->OlderSamp = voice->OldSamp;
 		voice->OldSamp = samp;
 	}
@@ -220,8 +221,13 @@ void DSP_Mix()
 	//*(vu32*)0x04000108 = 0x00800000;
 	// benchmark end
 	
+	register int spos = DSP_CurSample;
 	for (i = 0; i < SAMPLES_PER_ITER; i += 2)
-		*(u32*)&DSP_TempBuffer[i] = 0;
+	{
+		*(u32*)&DSP_LBuffer[spos] = 0;
+		*(u32*)&DSP_RBuffer[spos] = 0;
+		spos += 2;
+	}
 	
 	for (i = 0; i < 8; i++)
 	{
@@ -231,10 +237,13 @@ void DSP_Mix()
 		register u32 pos = voice->Position;
 		register u8 blockval = voice->CurBlockVal;
 		
+		spos = DSP_CurSample;
 		for (j = 0; j < SAMPLES_PER_ITER; j++)
 		{
-			s32 samp = DSP_TempBuffer[j] + voice->CurBlockSamples[(pos >> 12) & 0xF];
-			DSP_TempBuffer[j] = DSP_Clamp(samp);
+			s32 samp = voice->CurBlockSamples[(pos >> 12) & 0xF];
+			DSP_LBuffer[spos] = DSP_Clamp(DSP_LBuffer[spos] + samp);
+			DSP_RBuffer[spos] = DSP_Clamp(DSP_RBuffer[spos] + samp);
+			spos++;
 			
 			pos += voice->Pitch;
 			
@@ -276,11 +285,13 @@ void DSP_Mix()
 		voice->Position = pos;
 	}
 	
-	for (i = 0; i < SAMPLES_PER_ITER; i++)
+	/*for (i = 0; i < SAMPLES_PER_ITER; i++)
 	{
 		DSP_Buffer[DSP_CurSample++] = DSP_TempBuffer[i];//(s16)sample;//(sample ^ 0xFFFF);
 		DSP_CurSample &= (BUFFER_SIZE - 1);
-	}
+	}*/
+	DSP_CurSample += SAMPLES_PER_ITER;
+	DSP_CurSample &= (BUFFER_SIZE - 1);
 	
 	// benchmark code
 	//u16 timer_low = *(vu16*)0x04000108;

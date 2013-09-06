@@ -177,6 +177,8 @@ void makeMenu()
 }
 
 
+char fullpath[270];
+
 int main(void)
 {
 	int i;
@@ -251,7 +253,6 @@ int main(void)
 			}
 			else if ((keypress & 0x0003) != 0x0003) // A/B
 			{
-				char fullpath[270];
 				strncpy(fullpath, "snes/", 5);
 				strncpy(fullpath + 5, &filelist[menusel << 8], 256);
 				

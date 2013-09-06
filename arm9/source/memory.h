@@ -34,12 +34,12 @@ typedef struct
 
 #define MEMSTATUS_SIZE ((sizeof(Mem_StatusData) + 3) & ~3)
 
-extern u8* ROM_Cache[2 + ROMCACHE_SIZE];
+extern u8* ROM_Cache[3 + ROMCACHE_SIZE];
 extern u8* ROM_Bank0;
 extern u8* ROM_Bank0End;
 
 extern bool Mem_HiROM;
-extern u32* Mem_PtrTable DTCM_BSS;
+extern u32* Mem_PtrTable;
 
 extern u8 Mem_SysRAM[0x20000];
 

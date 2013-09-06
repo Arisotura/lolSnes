@@ -42,10 +42,12 @@ u32 ROM_DataCacheBank DTCM_DATA = 0x100;
 u8 ROM_DataCache[0x10000];*/
 u8* ROM_Bank0;
 u8* ROM_Bank0End;
-u8* ROM_Cache[2 + ROMCACHE_SIZE] DTCM_BSS;
-int ROM_CacheBank[2 + ROMCACHE_SIZE] DTCM_BSS;
+u8* ROM_Cache[3 + ROMCACHE_SIZE] DTCM_BSS;
+int ROM_CacheBank[3 + ROMCACHE_SIZE] DTCM_BSS;
 u8 ROM_CacheIndex DTCM_BSS;
 int ROM_CacheInited = 0;
+
+u8 ROM_CacheMisses[0x200];
 
 u32 ROM_FileOffset;
 
@@ -56,6 +58,7 @@ bool Mem_HiROM;
 u8 Mem_SysRAM[0x20000];
 u32 Mem_SRAMMask;
 u8* Mem_SRAM = NULL;
+FILE* Mem_SRAMFile = NULL;
 
 char Mem_ROMPath[256] DTCM_BSS;
 char Mem_SRAMPath[256] DTCM_BSS;
@@ -81,7 +84,7 @@ char Mem_SRAMPath[256] DTCM_BSS;
 //
 // table[-1] -> SRAM dirty flag
 // table[-2] -> HBlank/VBlank flags
-u32 _Mem_PtrTable[(MEMSTATUS_SIZE >> 2) + 0x800] DTCM_BSS;
+u32 _Mem_PtrTable[(MEMSTATUS_SIZE >> 2) + 0x800];
 u32* Mem_PtrTable DTCM_BSS;
 Mem_StatusData* Mem_Status;
 
@@ -178,6 +181,7 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 	{
 		if (type == 1) idx = ROMCACHE_SIZE;
 		else if (type == 2) idx = ROMCACHE_SIZE + 1;
+		else if (type == 3) idx = ROMCACHE_SIZE + 2;
 		else return;
 	}
 	else if (force)
@@ -194,6 +198,8 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 	ROM_CacheBank[idx] = bank;
 	if (!ROM_Cache[idx])
 		ROM_Cache[idx] = malloc(Mem_HiROM ? 0x10000 : 0x8000);
+		
+	ROM_FileOffset = -1;
 
 	u8* ptr = ROM_Cache[idx];
 	u32 base = ROM_BaseOffset;
@@ -389,26 +395,30 @@ void Mem_Reset()
 	
 	if (!ROM_CacheInited)
 	{
-		for (i = 0; i < 32; i++)
+		for (i = 0; i < 32 + 3; i++)
 			ROM_Cache[i] = 0;
 		
 		ROM_CacheInited = 0;
 	}
 
-	for (i = 0; i < 32 + 2; i++)
+	for (i = 0; i < 32 + 3; i++)
 		ROM_CacheBank[i] = -1;
 	ROM_CacheIndex = 0;
+	
+	for (i = 0; i < 0x200; i++)
+		ROM_CacheMisses[i] = 0;
 
 	if (Mem_SRAM) free(Mem_SRAM);
 	Mem_SRAM = malloc(Mem_SRAMMask + 1);
 	for (i = 0; i <= Mem_SRAMMask; i += 4)
 		*(u32*)&Mem_SRAM[i] = 0;
 		
-	FILE* sram = fopen(Mem_SRAMPath, "r");
-	if (sram)
+	Mem_SRAMFile = fopen(Mem_SRAMPath, "r");
+	if (Mem_SRAMFile)
 	{
-		fread(Mem_SRAM, Mem_SRAMMask+1, 1, sram);
-		fclose(sram);
+		fread(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+		fclose(Mem_SRAMFile);
+		Mem_SRAMFile = NULL;
 	}
 		
 	Mem_Status = &_Mem_PtrTable[0];
@@ -512,23 +522,34 @@ void Mem_SaveSRAM()
 	if (!Mem_Status->SRAMDirty)
 		return;
 	
-	FILE* sram = fopen(Mem_SRAMPath, "r+");
-	if (sram)
+	Mem_SRAMFile = fopen(Mem_SRAMPath, "r+");
+	if (Mem_SRAMFile)
 	{
 		iprintf("SRAM save\n");
 		Mem_Status->SRAMDirty = 0;
-		fseek(sram, 0, SEEK_SET);
-		fwrite(Mem_SRAM, Mem_SRAMMask+1, 1, sram);
-		fclose(sram);
+		fseek(Mem_SRAMFile, 0, SEEK_SET);
+		fwrite(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+		fclose(Mem_SRAMFile);
+		Mem_SRAMFile = NULL;
 	}
 }
 
 
 u32 ROM_ReadBuffer;
 
+void ROM_CacheMiss(u32 addr)
+{
+	u32 bank = addr >> (Mem_HiROM ? 16 : 15);
+	
+	ROM_CacheMisses[bank]++;
+	if (ROM_CacheMisses[bank] > 4)
+	{
+		ROM_CacheMisses[bank] = 0;
+		_ROM_DoCacheBank(Mem_HiROM ? (bank-0x40) : bank, 3, false);
+	}
+}
+
 // (slow) uncached ROM read
-// potential optimization: detect sequential reads to avoid
-// seeking every time
 ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 {
 	asm("stmdb sp!, {r1-r3, r12}");
@@ -546,6 +567,8 @@ ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 	}
 	else
 		ROM_ReadBuffer = 0;
+	
+	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
 
 	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0xFF;
@@ -569,6 +592,8 @@ ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
 	else
 		ROM_ReadBuffer = 0;
 	
+	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
+	
 	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0xFFFF;
 }
@@ -590,6 +615,8 @@ ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
 	}
 	else
 		ROM_ReadBuffer = 0;
+		
+	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
 
 	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0x00FFFFFF;
@@ -773,6 +800,12 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 	
 	switch (addr)
 	{
+		case 0x02:
+			Mem_MulA = val & 0xFF;
+			Mem_MulRes = (u16)Mem_MulA * (val >> 8);
+			Mem_DivRes = (u16)val;
+			break;
+			
 		case 0x04:
 			Mem_DivA = val;
 			break;

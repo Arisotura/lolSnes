@@ -156,6 +156,18 @@ u8 PPU_SpriteSize[16] =
 	16, 32, 32, 64
 };
 
+u16 PPU_OBJPrio[8][4] = 
+{
+	{2<<10, 2<<10, 0, 0},
+	{2<<10, 2<<10, 0, 0},
+	{1<<10, 0, 0, 0},
+	{1<<10, 0, 0, 0},
+	{1<<10, 0, 0, 0},
+	{1<<10, 0, 0, 0},
+	{1<<10, 0, 0, 0},
+	{1<<10, 0, 0, 0}
+};
+
 
 u16 PPU_M7Old;
 
@@ -846,7 +858,7 @@ void PPU_UpdateOAM(u16 addr, u16 val)
 				{
 					oam[1] = (oam[1] & 0xFFFFCFFF) | ((val & 0xC000) >> 2);
 					
-					u16 prio = 0;// !(val & 0x1000) ? 0x0000 : 0x0800;
+					u16 prio = PPU_OBJPrio[PPU_Mode][(val >> 12) & 0x3];
 					oam[2] = prio | ((val & 0x01F0) << 1) | (val & 0x000F) | ((val & 0x0E00) << 3) | 0x8000;
 					
 					// bit0-8: tile num
@@ -1170,9 +1182,17 @@ void PPU_Write8(u32 addr, u8 val)
 			{
 				PPU_CurColor |= (val << 8);
 				register u16 paddr = PPU_CGRAMAddr << 1;
-				if (paddr == 0) PPU_MainBackdrop = PPU_CurColor;
-				else *(u16*)(0x05000000 + paddr) = PPU_CurColor;
+				
+				if (paddr == 0) 
+				{
+					PPU_MainBackdrop = PPU_CurColor;
+					*(u16*)0x05000000 = PPU_SubBackdrop ? PPU_SubBackdrop : PPU_MainBackdrop;
+				}
+				else 
+					*(u16*)(0x05000000 + paddr) = PPU_CurColor;
+				
 				*(u16*)(0x05000200 + paddr) = PPU_CurColor;
+				
 				PPU_CGRAMAddr++;
 				PPU_CGRDirty = 1;
 			}
@@ -1234,7 +1254,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
-		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
+		case 0x42: if (val == 0xFFAA) {for(;;);}*(u16*)&IPC->SPC_IOPorts[2] = val; iprintf("2142=%04X\n", val); break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

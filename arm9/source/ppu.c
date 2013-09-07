@@ -1254,7 +1254,7 @@ void PPU_Write16(u32 addr, u16 val)
 			break;
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
-		case 0x42: if (val == 0xFFAA) {for(;;);}*(u16*)&IPC->SPC_IOPorts[2] = val; iprintf("2142=%04X\n", val); break;
+		case 0x42: *(u16*)&IPC->SPC_IOPorts[2] = val; break;
 		
 		case 0x41:
 		case 0x43: iprintf("!! write $21%02X %04X\n", addr, val); break;

@@ -2856,6 +2856,8 @@ OP_m1_LSR_DPIndX:
 OP_x0_MVN:
 	Prefetch8 r1
 	Prefetch8
+	bic snesDBR, snesDBR, #0xFF
+	orr snesDBR, snesDBR, r1
 	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
@@ -2876,6 +2878,8 @@ OP_x0_MVN:
 OP_x1_MVN:
 	Prefetch8 r1
 	Prefetch8
+	bic snesDBR, snesDBR, #0xFF
+	orr snesDBR, snesDBR, r1
 	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
@@ -2900,6 +2904,8 @@ OP_x1_MVN:
 OP_x0_MVP:
 	Prefetch8 r1
 	Prefetch8
+	bic snesDBR, snesDBR, #0xFF
+	orr snesDBR, snesDBR, r1
 	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8
@@ -2920,6 +2926,8 @@ OP_x0_MVP:
 OP_x1_MVP:
 	Prefetch8 r1
 	Prefetch8
+	bic snesDBR, snesDBR, #0xFF
+	orr snesDBR, snesDBR, r1
 	orr r2, snesY, r1, lsl #0x10
 	orr r0, snesX, r0, lsl #0x10
 	MemRead8

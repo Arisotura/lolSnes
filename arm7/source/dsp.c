@@ -316,15 +316,10 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 	//brrtime += *(vu16*)0x0400010C;
 	//*(vu32*)0x0400010C = 0x00000000;
 }
-u32 maxtime = 0;
+
 void DSP_Mix()
 {
 	int i, j;
-	
-	// benchmark code
-	//*(vu32*)0x0400010C = 0x00840000;
-	//*(vu32*)0x04000108 = 0x00800000;
-	// benchmark end
 	
 	//brrtime = 0;
 	//*(vu32*)0x04000108 = 0x00800000;
@@ -407,12 +402,6 @@ void DSP_Mix()
 	DSP_CurSample += SAMPLES_PER_ITER;
 	DSP_CurSample &= (BUFFER_SIZE - 1);
 	
-	// benchmark code
-	//u16 timer_low = *(vu16*)0x04000108;
-	//u16 timer_high = *(vu16*)0x0400010C;
-	//u32 timer = timer_low | (timer_high << 16);
-	//if (timer > maxtime) { maxtime = timer; spcPrintf("mixer time: %d cycles\n", timer); }
-	// benchmark end
 	//u16 mixtime = *(vu16*)0x04000108;
 	//*(vu32*)0x04000108 = 0x00000000;
 	//if (mixtime > 1000) spcPrintf("mixer: %d | BRR: %d\n", mixtime, brrtime);

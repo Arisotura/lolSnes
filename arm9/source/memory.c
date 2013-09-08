@@ -51,6 +51,8 @@ u8 ROM_CacheMisses[0x200];
 
 u32 ROM_FileOffset;
 
+u8 ROM_Region;
+
 //void (*ROM_CacheCode)(u32 bank) DTCM_BSS;
 //void (*ROM_CacheData)(u32 bank) DTCM_BSS;
 
@@ -369,6 +371,13 @@ bool Mem_LoadROM(char* path)
 
 	fseek(ROM_File, ROM_HeaderOffset + 0x18, SEEK_SET);
 	u8 sramsize; fread(&sramsize, 1, 1, ROM_File);
+	u8 region; fread(&region, 1, 1, ROM_File);
+	
+	if (region <= 0x01 || (region >= 0x0D && region <= 0x10))
+		ROM_Region = 0;
+	else
+		ROM_Region = 1;
+	
 	Mem_SRAMMask = sramsize ? ((1024 << sramsize) - 1) : 0;
 	Mem_SRAMMask &= 0x000FFFFF;
 	iprintf("SRAM size: %dKB\n", (Mem_SRAMMask+1) >> 10);

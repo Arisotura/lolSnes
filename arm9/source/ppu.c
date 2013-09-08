@@ -945,6 +945,9 @@ u8 PPU_Read8(u32 addr)
 					PPU_VRAMAddr += PPU_VRAMStep;
 			}
 			break;
+			
+		case 0x3E: ret = 0x01; break;
+		case 0x3F: ret = 0x01 | (ROM_Region ? 0x10 : 0x00); break;
 		
 		case 0x40: ret = IPC->SPC_IOPorts[4]; break;
 		case 0x41: ret = IPC->SPC_IOPorts[5]; break;

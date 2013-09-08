@@ -38,6 +38,8 @@ extern u8* ROM_Cache[3 + ROMCACHE_SIZE];
 extern u8* ROM_Bank0;
 extern u8* ROM_Bank0End;
 
+extern u8 ROM_Region;
+
 extern bool Mem_HiROM;
 extern u32* Mem_PtrTable;
 

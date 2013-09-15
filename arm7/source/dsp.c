@@ -91,6 +91,7 @@ typedef struct
 	int Status;
 	
 	u16 Pitch;
+	u16 FinalPitch;
 	u16 ParamAddr;
 	u16 CurAddr;
 	u16 LoopBlock;
@@ -216,13 +217,16 @@ void DSP_Reset()
 	*(vu16*)0x04000500 = 0x807F;
 	*(vu16*)0x04000504 = 0x0200;
 	
+	//u16 timerval = 0xFDF5; // 32KHz
+	u16 timerval = 0xFD46; // 24KHz
+	
 	*(vu32*)0x04000404 = (u32)&DSP_LBuffer[0];
-	*(vu16*)0x04000408 = 0xFDF5;
+	*(vu16*)0x04000408 = timerval;
 	*(vu16*)0x0400040A = 0x0000;
 	*(vu32*)0x0400040C = BUFFER_SIZE >> 1;
 	
 	*(vu32*)0x04000414 = (u32)&DSP_RBuffer[0];
-	*(vu16*)0x04000418 = 0xFDF5;
+	*(vu16*)0x04000418 = timerval;
 	*(vu16*)0x0400041A = 0x0000;
 	*(vu32*)0x0400041C = BUFFER_SIZE >> 1;
 	
@@ -352,7 +356,7 @@ void DSP_Mix()
 			DSP_RBuffer[spos] = DSP_Clamp(DSP_RBuffer[spos] + samp);
 			spos++;
 			
-			pos += voice->Pitch;
+			pos += voice->FinalPitch;
 			
 			u16 block = pos >> 16;
 			if (block != voice->CurBlock)
@@ -469,10 +473,12 @@ void DSP_Write(u8 reg, u8 val)
 			case 0x02:
 				voice->Pitch &= 0x3F00;
 				voice->Pitch |= val;
+				voice->FinalPitch = voice->Pitch + (voice->Pitch / 3);
 				break;
 			case 0x03:
 				voice->Pitch &= 0x00FF;
 				voice->Pitch |= ((val & 0x3F) << 8);
+				voice->FinalPitch = voice->Pitch + (voice->Pitch / 3);
 				break;
 		}
 	}

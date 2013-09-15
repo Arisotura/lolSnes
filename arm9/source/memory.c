@@ -798,6 +798,9 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 		case 0x0B:
 			DMA_Enable(val);
 			break;
+		case 0x0C:
+			//iprintf("HDMA enable: %02X\n", val);
+			break;
 	}
 	
 	asm("ldmia sp!, {r12}");

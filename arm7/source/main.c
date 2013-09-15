@@ -61,7 +61,8 @@ int main()
 	// set timer 0 to run at ~2000Hz
 	// (16 samples are mixed each time)
 	irqEnable(IRQ_TIMER0);
-	*(vu16*)0x04000100 = 0xBEA0;
+	//*(vu16*)0x04000100 = 0xBEA0;
+	*(vu16*)0x04000100 = 0xA8C0;
 	*(vu16*)0x04000102 = 0x00C0;
 	irqSet(IRQ_TIMER0, DSP_Mix);
 

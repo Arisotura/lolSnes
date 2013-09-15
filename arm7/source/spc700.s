@@ -319,7 +319,10 @@ SPC_Run:
 	
 frameloop:
 		@add spcCycles, spcCycles, #0x20
-		add spcCycles, spcCycles, #0x200
+		@add spcCycles, spcCycles, #0x200
+		@add spcCycles, spcCycles, #0x300
+		add spcCycles, spcCycles, #0x0200
+		add spcCycles, spcCycles, #0x00AA
 		
 bigemuloop:
 		stmdb sp!, {spcCycles}

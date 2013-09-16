@@ -103,9 +103,8 @@ typedef struct
 	u8 CurBlockVal;
 	
 	u32 CurSample;
-	s32 CurSamp, OlderSamp, OldSamp;
 	
-	s32 CurBlockSamples[16];
+	s32 CurBlockSamples[3 + 16];
 	
 } DSP_Voice;
 DSP_Voice DSP_Voices[8];
@@ -140,6 +139,10 @@ void DSP_Reset()
 		voice->LoopAddr = 0;
 		voice->Position = 0;
 		voice->Pitch = 0;
+		
+		int j;
+		for (j = 0; j < 3 + 16; j++)
+			voice->CurBlockSamples[j] = 0;
 	}
 	
 	
@@ -246,22 +249,24 @@ inline s32 DSP_Clamp(s32 val)
 	return val;
 }
 
-s32 DSP_BRRFilter1(s32 samp, DSP_Voice* voice)
+// BRR filters: buf points to the current sample
+
+void DSP_BRRFilter1(s32 samp, s32* buf)
 {
-	return samp + voice->OldSamp + ((-voice->OldSamp) >> 4);
+	buf[0] += buf[-1] + ((-buf[-1]) >> 4);
 }
 
-s32 DSP_BRRFilter2(s32 samp, DSP_Voice* voice)
+void DSP_BRRFilter2(s32 samp, s32* buf)
 {
-	return samp + (voice->OldSamp << 1) + ((-voice->OldSamp * 3) >> 5) - voice->OlderSamp + (voice->OlderSamp >> 4);
+	buf[0] += (buf[-1] << 1) + ((-buf[-1] * 3) >> 5) - buf[-2] + (buf[-2] >> 4);
 }
 
-s32 DSP_BRRFilter3(s32 samp, DSP_Voice* voice)
+void DSP_BRRFilter3(s32 samp, s32* buf)
 {
-	return samp + (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4);
+	buf[0] += (buf[-1] << 1) + ((-buf[-1] * 13) >> 6) - buf[-2] + ((buf[-2] * 3) >> 4);
 }
 
-s32 (*DSP_BRRFilters[4])(u32, DSP_Voice*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };
+void (*DSP_BRRFilters[4])(s32, s32*) = { 0, DSP_BRRFilter1, DSP_BRRFilter2, DSP_BRRFilter3 };
 
 u32 brrtime = 0;
 void DSP_DecodeBRR(int nv, DSP_Voice* voice)
@@ -269,11 +274,15 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 	//*(vu32*)0x0400010C = 0x00800000;
 	
 	register u8* data = &SPC_RAM[voice->CurAddr];
-	register s32* dst = &voice->CurBlockSamples[0];
+	register s32* dst = &voice->CurBlockSamples[3];
+	
+	dst[-3] = dst[13];
+	dst[-2] = dst[14];
+	dst[-1] = dst[15];
 	
 	register u8 blockval = *data++;
 	register u8 shift = blockval & 0xF0;
-	register s32 (*brrfilter)(s32, DSP_Voice*) = DSP_BRRFilters[(blockval & 0x0C) >> 2];
+	register void (*brrfilter)(s32, s32*) = DSP_BRRFilters[(blockval & 0x0C) >> 2];
 	
 	int i;
 	for (i = 8; i > 0; i--)
@@ -281,36 +290,14 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 		u8 byte = *data++;
 		
 		s32 samp = (s32)DSP_BRRTable[(byte >> 4) | shift];
-		
-		/*switch (blockval & 0x0C)
-		{
-			case 0x00: break;
-			case 0x04: samp += voice->OldSamp + ((-voice->OldSamp) >> 4); break;
-			case 0x08: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 3) >> 5) - voice->OlderSamp + (voice->OlderSamp >> 4); break;
-			case 0x0C: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4); break;
-		}*/
-		if (brrfilter) samp = (*brrfilter)(samp, voice);
-		//samp = DSP_Clamp(samp >> 1) << 1;
-		
-		*dst++ = samp;
-		voice->OlderSamp = voice->OldSamp;
-		voice->OldSamp = samp;
+		*dst = samp;
+		if (brrfilter) (*brrfilter)(samp, dst);
+		dst++;
 		
 		samp = (s32)DSP_BRRTable[(byte & 0x0F) | shift];
-		
-		/*switch (blockval & 0x0C)
-		{
-			case 0x00: break;
-			case 0x04: samp += voice->OldSamp + ((-voice->OldSamp) >> 4); break;
-			case 0x08: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 3) >> 5) - voice->OlderSamp + (voice->OlderSamp >> 4); break;
-			case 0x0C: samp += (voice->OldSamp << 1) + ((-voice->OldSamp * 13) >> 6) - voice->OlderSamp + ((voice->OlderSamp * 3) >> 4); break;
-		}*/
-		if (brrfilter) samp = (*brrfilter)(samp, voice);
-		//samp = DSP_Clamp(samp >> 1) << 1;
-		
-		*dst++ = samp;
-		voice->OlderSamp = voice->OldSamp;
-		voice->OldSamp = samp;
+		*dst = samp;
+		if (brrfilter) (*brrfilter)(samp, dst);
+		dst++;
 	}
 	
 	voice->CurAddr += 9;
@@ -351,7 +338,16 @@ void DSP_Mix()
 		spos = DSP_CurSample;
 		for (j = 0; j < SAMPLES_PER_ITER; j++)
 		{
-			s32 samp = voice->CurBlockSamples[(pos >> 12) & 0xF];
+			int _pos = 3 + ((pos >> 12) & 0xF);
+			s32 samp = voice->CurBlockSamples[_pos];
+			
+			// interpolation
+			/*int interp = (pos >> 4) & 0xFF;
+			samp = 	((samp * DSP_GaussTable[interp]) >> 11) + 
+					((voice->CurBlockSamples[_pos-1] * DSP_GaussTable[0x100+interp]) >> 11) +
+					((voice->CurBlockSamples[_pos-2] * DSP_GaussTable[0x1FF-interp]) >> 11) +
+					((voice->CurBlockSamples[_pos-3] * DSP_GaussTable[0x0FF-interp]) >> 11);*/
+			
 			DSP_LBuffer[spos] = DSP_Clamp(DSP_LBuffer[spos] + samp);
 			DSP_RBuffer[spos] = DSP_Clamp(DSP_RBuffer[spos] + samp);
 			spos++;

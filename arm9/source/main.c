@@ -45,6 +45,16 @@ void arm7print(u32 value32, void * userdata)
 char* filelist;
 int nfiles;
 
+bool isGoodFile(struct dirent* entry)
+{
+	if (entry->d_type != DT_REG) return false;
+	
+	char* ext = &entry->d_name[strlen(entry->d_name) - 4];
+	if (strncmp(ext, ".smc", 4) && strncmp(ext, ".sfc", 4)) return false;
+	
+	return true;
+}
+
 void makeROMList()
 {
 	DIR* romdir = opendir("snes");
@@ -55,7 +65,7 @@ void makeROMList()
 		
 		while (entry = readdir(romdir))
 		{
-			if (entry->d_type != DT_REG) continue;
+			if (!isGoodFile(entry)) continue;
 			i++;
 		}
 			
@@ -66,7 +76,7 @@ void makeROMList()
 		i = 0;
 		while (entry = readdir(romdir))
 		{
-			if (entry->d_type != DT_REG) continue;
+			if (!isGoodFile(entry)) continue;
 			strncpy(&filelist[i << 8], entry->d_name, 255);
 			filelist[(i << 8) + 255] = '\0';
 			i++;

@@ -19,6 +19,7 @@
 #include <nds.h>
 
 #include "spc700.h"
+#include "helper.h"
 
 
 u8 DSP_Regs[0x80];
@@ -97,6 +98,10 @@ typedef struct
 	u16 LoopBlock;
 	u16 LoopAddr;
 	u32 Position;
+	
+	// volume crapo
+	s8 LeftVolume;
+	s8 RightVolume;
 	
 	// BRR decoding
 	u16 CurBlock;
@@ -315,13 +320,9 @@ void DSP_Mix()
 	//brrtime = 0;
 	//*(vu32*)0x04000108 = 0x00800000;
 	
-	register int spos = DSP_CurSample;
-	for (i = 0; i < SAMPLES_PER_ITER; i += 2)
-	{
-		*(u32*)&DSP_LBuffer[spos] = 0;
-		*(u32*)&DSP_RBuffer[spos] = 0;
-		spos += 2;
-	}
+	register s16* lbuf = &DSP_LBuffer[DSP_CurSample];
+	register s16* rbuf = &DSP_RBuffer[DSP_CurSample];
+	zerofillBuffers(lbuf, rbuf);
 	
 	register DSP_Voice* voice = &DSP_Voices[0];
 	for (i = 0; i < 8; i++)
@@ -334,12 +335,12 @@ void DSP_Mix()
 		
 		register u32 pos = voice->Position;
 		register u8 blockval = voice->CurBlockVal;
+		register s32* sbuf = &voice->CurBlockSamples[0];
 		
-		spos = DSP_CurSample;
 		for (j = 0; j < SAMPLES_PER_ITER; j++)
 		{
 			int _pos = 3 + ((pos >> 12) & 0xF);
-			s32 samp = voice->CurBlockSamples[_pos];
+			s32 samp = sbuf[_pos];
 			
 			// interpolation
 			/*int interp = (pos >> 4) & 0xFF;
@@ -350,12 +351,14 @@ void DSP_Mix()
 			//if (voice->Pitch < 0x1000)
 			{
 				int interp = (pos >> 4) & 0xFF;
-				samp = ((samp * interp) + (voice->CurBlockSamples[_pos-1] * (0xFF-interp))) >> 8;
+				samp = ((samp * interp) + (sbuf[_pos-1] * (0xFF-interp))) >> 8;
 			}
 			
-			DSP_LBuffer[spos] = DSP_Clamp(DSP_LBuffer[spos] + samp);
-			DSP_RBuffer[spos] = DSP_Clamp(DSP_RBuffer[spos] + samp);
-			spos++;
+			// TODO: apply ADSR here
+			
+			*lbuf = DSP_Clamp(*lbuf + ((samp * voice->LeftVolume) >> 7));
+			*rbuf = DSP_Clamp(*rbuf + ((samp * voice->RightVolume) >> 7));
+			lbuf++; rbuf++;
 			
 			pos += voice->FinalPitch;
 			
@@ -397,6 +400,8 @@ void DSP_Mix()
 		voice->Position = pos;
 		
 		voice++;
+		lbuf -= SAMPLES_PER_ITER;
+		rbuf -= SAMPLES_PER_ITER;
 	}
 	
 	/*for (i = 0; i < SAMPLES_PER_ITER; i++)
@@ -471,6 +476,13 @@ void DSP_Write(u8 reg, u8 val)
 		
 		switch (reg & 0x0F)
 		{
+			case 0x00:
+				voice->LeftVolume = (s8)val;
+				break;
+			case 0x01:
+				voice->RightVolume = (s8)val;
+				break;
+				
 			case 0x02:
 				voice->Pitch &= 0x3F00;
 				voice->Pitch |= val;

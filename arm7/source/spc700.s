@@ -80,8 +80,8 @@ SPC_UpdateMemMap:
 	ldrneb r0, [memory, \addr]
 	bne 1f
 	@ speedhack: when reading timer values, eat cycles
-	@cmp \addr, #0xFD
-	@orrge spcPSW, spcPSW, #flagT1
+	cmp \addr, #0xFD
+	orrge spcPSW, spcPSW, #flagT1
 2:
 	.ifnc \addr, r0
 		mov r0, \addr
@@ -316,28 +316,28 @@ SPC_Reset:
 	
 SPC_Run:
 	LoadRegs
+	mov r0, #0
+	stmdb sp!, {r0}
 	
 frameloop:
-		@add spcCycles, spcCycles, #0x20
-		@add spcCycles, spcCycles, #0x200
-		@add spcCycles, spcCycles, #0x300
-		add spcCycles, spcCycles, #0x0200
-		add spcCycles, spcCycles, #0x00AA
+	ldr r0, =0x2AA
+	ldr r12, [sp]
+	add r12, r12, r0
+	str r12, [sp]
 		
 bigemuloop:
+		add spcCycles, spcCycles, #0x40
 		stmdb sp!, {spcCycles}
 			
 emuloop:
-			@tst spcPSW, #flagT1
-			@beq nospeedhax
-			@tst spcPSW, #flagT2
-			@orreq spcPSW, spcPSW, #flagT2
-			@bicne spcPSW, spcPSW, #(flagT1|flagT2)
-nospeedhax:
 			
 			Prefetch8
 			ldr pc, [opTable, r0, lsl #0x2]
 op_return:
+
+			tst spcPSW, #flagT1
+			movne r3, spcCycles
+			bicne spcPSW, spcPSW, #flagT1
 			
 			@ timer 2
 		
@@ -346,85 +346,60 @@ op_return:
 			
 			tst r0, #0x04
 			beq noTimer2
-			ldrb r1, [r12, #9]
+			ldrh r1, [r12, #0xE]
 			subs r1, r1, r3
-			strplb r1, [r12, #9]
+			strplh r1, [r12, #0xE]
 			bpl noTimer2
-			add r1, r1, #0x10
-			strb r1, [r12, #9]
-			ldrb r1, [r12, #10]
-			ldrb r2, [r12, #11]
+			ldrh r2, [r12, #0x10]
+			add r1, r1, r2
+			strh r1, [r12, #0xE]
+			ldrb r1, [r12, #0x12]
 			add r1, r1, #1
-			cmp r1, r2
-			strneb r1, [r12, #10]
-			bne noTimer2
-			mov r1, #0
-			strb r1, [r12, #10]
-			ldrb r1, [r12, #12]
-			add r1, r1, #1
-			strb r1, [r12, #12]
+			strb r1, [r12, #0x12]
 
 noTimer2:
-			@cmp spcCycles, #1
-			@bge emuloop
-			sub spcCycles, spcCycles, r3
-			ldr r3, [sp]
-			sub r3, r3, spcCycles
-			cmp r3, #0x20
-			blt emuloop
+			subs spcCycles, spcCycles, r3
+			bpl emuloop
 			
 		@ timers 0 and 1
 		
-		add sp, sp, #0x4
+		ldmia sp!, {r3}
+		sub r3, r3, spcCycles
 		ldr r12, =SPC_Timers
 		ldrb r0, [r12]
 		
 		tst r0, #0x01
 		beq noTimer0
-		ldrb r1, [r12, #1]
+		ldrh r1, [r12, #0x2]
 		subs r1, r1, r3
-		strplb r1, [r12, #1]
+		strplh r1, [r12, #0x2]
 		bpl noTimer0
-		add r1, r1, #0x80
-		strb r1, [r12, #1]
-		ldrb r1, [r12, #2]
-		ldrb r2, [r12, #3]
+		ldrh r2, [r12, #0x4]
+		add r1, r1, r2
+		strh r1, [r12, #0x2]
+		ldrb r1, [r12, #0x6]
 		add r1, r1, #1
-		cmp r1, r2
-		strneb r1, [r12, #2]
-		bne noTimer0
-		mov r1, #0
-		strb r1, [r12, #2]
-		ldrb r1, [r12, #4]
-		add r1, r1, #1
-		strb r1, [r12, #4]
+		strb r1, [r12, #0x6]
 		
 noTimer0:
 		tst r0, #0x02
 		beq noTimer1
-		ldrb r1, [r12, #5]
+		ldrh r1, [r12, #0x8]
 		subs r1, r1, r3
-		strplb r1, [r12, #5]
+		strplh r1, [r12, #0x8]
 		bpl noTimer1
-		add r1, r1, #0x80
-		strb r1, [r12, #5]
-		ldrb r1, [r12, #6]
-		ldrb r2, [r12, #7]
+		ldrh r2, [r12, #0xA]
+		add r1, r1, r2
+		strh r1, [r12, #0x8]
+		ldrb r1, [r12, #0xC]
 		add r1, r1, #1
-		cmp r1, r2
-		strneb r1, [r12, #6]
-		bne noTimer1
-		mov r1, #0
-		strb r1, [r12, #6]
-		ldrb r1, [r12, #8]
-		add r1, r1, #1
-		strb r1, [r12, #8]
+		strb r1, [r12, #0xC]
 		
 noTimer1:
-		cmp spcCycles, #1
-		bge bigemuloop
-			
-		@bl DSP_Mix
+		ldr r12, [sp]
+		subs r12, r12, r3
+		str r12, [sp]
+		bpl bigemuloop
 		
 		@ wait for timer 0
 		@ (do not wait if we missed the IRQ)

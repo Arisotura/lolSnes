@@ -23,13 +23,19 @@
 
 struct SPC_TimersStruct
 {
+	// 0x00
 	u8 EnableMask;
+	u8 __fgqgqdfh;
+	
+	// timer 0: 0x02
+	// timer 1: 0x08
+	// timer 2: 0x0E
 	struct
 	{
-		u8 CycleCount;
-		u8 IterCount;
-		u8 Limit;
+		u16 CycleCount;
+		u16 Reload;
 		u8 Val;
+		u8 __zerfzergdf;
 		
 	} Timer[3];
 	
@@ -47,17 +53,14 @@ void SPC_InitMisc()
 	SPC_DSPAddr = 0;
 	
 	SPC_Timers.EnableMask = 0;
-	SPC_Timers.Timer[0].CycleCount = 128;
-	SPC_Timers.Timer[0].IterCount = 0;
-	SPC_Timers.Timer[0].Limit = 0;
+	SPC_Timers.Timer[0].CycleCount = 0;
+	SPC_Timers.Timer[0].Reload = 0;
 	SPC_Timers.Timer[0].Val = 0;
-	SPC_Timers.Timer[1].CycleCount = 128;
-	SPC_Timers.Timer[1].IterCount = 0;
-	SPC_Timers.Timer[1].Limit = 0;
+	SPC_Timers.Timer[1].CycleCount = 0;
+	SPC_Timers.Timer[1].Reload = 0;
 	SPC_Timers.Timer[1].Val = 0;
-	SPC_Timers.Timer[2].CycleCount = 16;
-	SPC_Timers.Timer[2].IterCount = 0;
-	SPC_Timers.Timer[2].Limit = 0;
+	SPC_Timers.Timer[2].CycleCount = 0;
+	SPC_Timers.Timer[2].Reload = 0;
 	SPC_Timers.Timer[2].Val = 0;
 	
 	DSP_Reset();
@@ -120,11 +123,11 @@ void SPC_IOWrite8(u16 addr, u8 val)
 				SPC_Timers.EnableMask = val & 0x07;
 				
 				if (!(val & 0x01)) SPC_Timers.Timer[0].Val = 0;
-				else { SPC_Timers.Timer[0].CycleCount = 128; SPC_Timers.Timer[0].IterCount = 0; }
+				else { SPC_Timers.Timer[0].CycleCount = SPC_Timers.Timer[0].Reload; }
 				if (!(val & 0x02)) SPC_Timers.Timer[1].Val = 0;
-				else { SPC_Timers.Timer[1].CycleCount = 128; SPC_Timers.Timer[1].IterCount = 0; }
+				else { SPC_Timers.Timer[1].CycleCount = SPC_Timers.Timer[1].Reload; }
 				if (!(val & 0x04)) SPC_Timers.Timer[2].Val = 0;
-				else { SPC_Timers.Timer[2].CycleCount = 16; SPC_Timers.Timer[2].IterCount = 0; }
+				else { SPC_Timers.Timer[2].CycleCount = SPC_Timers.Timer[2].Reload; }
 				
 				if (val & 0x10) *(u16*)&IPC->SPC_IOPorts[0] = 0x0000;
 				if (val & 0x20) *(u16*)&IPC->SPC_IOPorts[2] = 0x0000;
@@ -141,9 +144,9 @@ void SPC_IOWrite8(u16 addr, u8 val)
 		case 0xF6: IPC->SPC_IOPorts[6] = val; break;
 		case 0xF7: IPC->SPC_IOPorts[7] = val; break;
 		
-		case 0xFA: SPC_Timers.Timer[0].Limit = val; break;
-		case 0xFB: SPC_Timers.Timer[1].Limit = val; break;
-		case 0xFC: SPC_Timers.Timer[2].Limit = val; break;
+		case 0xFA: SPC_Timers.Timer[0].Reload = val << 7; break;
+		case 0xFB: SPC_Timers.Timer[1].Reload = val << 7; break;
+		case 0xFC: SPC_Timers.Timer[2].Reload = val << 4; break;
 	}
 	
 	asm("ldmia sp!, {r1-r3, r12}");

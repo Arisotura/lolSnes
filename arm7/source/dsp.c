@@ -347,6 +347,11 @@ void DSP_Mix()
 					((voice->CurBlockSamples[_pos-1] * DSP_GaussTable[0x100+interp]) >> 11) +
 					((voice->CurBlockSamples[_pos-2] * DSP_GaussTable[0x1FF-interp]) >> 11) +
 					((voice->CurBlockSamples[_pos-3] * DSP_GaussTable[0x0FF-interp]) >> 11);*/
+			//if (voice->Pitch < 0x1000)
+			{
+				int interp = (pos >> 4) & 0xFF;
+				samp = ((samp * interp) + (voice->CurBlockSamples[_pos-1] * (0xFF-interp))) >> 8;
+			}
 			
 			DSP_LBuffer[spos] = DSP_Clamp(DSP_LBuffer[spos] + samp);
 			DSP_RBuffer[spos] = DSP_Clamp(DSP_RBuffer[spos] + samp);

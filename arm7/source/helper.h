@@ -19,6 +19,6 @@
 #ifndef _HELPER_H_
 #define _HELPER_H_
 
-void zerofillBuffers(void* buf, u32 len);
+void zerofillBuffers(void* buf1, void* buf2);
 
 #endif

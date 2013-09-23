@@ -48,7 +48,7 @@ u32 DSP_CurSample = 0;
 // 4XYY: repeat following value X times, then increment, do that Y times
 // 2XYY: increment following value by X, do that Y times
 // FFFF: stop
-u16 comp_gauss[] = 
+/*u16 comp_gauss[] = 
 {
 	0x8010, 0x0000, 0x800B, 0x0001, 0x8007, 0x0002, 0x8005, 0x0003, 
 	0x8005, 0x0004, 0x8004, 0x0005, 0x8004, 0x0006, 0x8003, 0x0007, 
@@ -83,7 +83,15 @@ u16 comp_gauss[] =
 	0x2103, 0x0514, 0x0516, 0x8003, 0x0517, 0x8005, 0x0518, 0x0519, 
 	0x0519, 0xFFFF
 };
-#define DSP_GaussTable ((s16*)0x0601FA00)
+#define DSP_GaussTable ((s16*)0x0601FA00)*/
+
+u32 DSP_RateTable[32] = 
+{
+	0xFFFFFFFF, 2048, 1536, 1280, 1024, 768, 640, 512,
+	384, 320, 256, 192, 160, 128, 96, 80,
+	64, 48, 40, 32, 24, 20, 16, 12,
+	10, 8, 6, 5, 4, 3, 2, 1
+};
 
 extern int itercount;
 
@@ -102,6 +110,19 @@ typedef struct
 	// volume crapo
 	s8 LeftVolume;
 	s8 RightVolume;
+	u16 EnvVolume;
+	
+	u8 EnvMode; // 0=direct 1=custom 2=3=adsr
+	u8 AttackRate;
+	u8 DecayRate;
+	u8 SustainRate;
+	u8 SustainLevel;
+	u16 FixedVol;
+	u8 GainMode;
+	u8 GainRate;
+	
+	void (*EnvFunc)(void*);
+	u32 EnvCounter;
 	
 	// BRR decoding
 	u16 CurBlock;
@@ -118,6 +139,16 @@ DSP_Voice DSP_Voices[8];
 //#define BRRCACHE_SIZE 1925
 //#define DSP_BRRCache (s16*)0x06010040
 //#define DSP_BRRTable (u16*)0x0601F0E0
+
+
+void DSP_Env_Attack(DSP_Voice* voice);
+void DSP_Env_Decay(DSP_Voice* voice);
+void DSP_Env_Sustain(DSP_Voice* voice);
+void DSP_Env_Release(DSP_Voice* voice);
+void DSP_Env_LinDecrease(DSP_Voice* voice);
+void DSP_Env_ExpDecrease(DSP_Voice* voice);
+void DSP_Env_LinIncrease(DSP_Voice* voice);
+void DSP_Env_BentIncrease(DSP_Voice* voice);
 
 
 void DSP_Reset()
@@ -144,6 +175,7 @@ void DSP_Reset()
 		voice->LoopAddr = 0;
 		voice->Position = 0;
 		voice->Pitch = 0;
+		voice->EnvMode = 0;
 		
 		int j;
 		for (j = 0; j < 3 + 16; j++)
@@ -151,7 +183,7 @@ void DSP_Reset()
 	}
 	
 	
-	u16* gsrc = &comp_gauss[0];
+	/*u16* gsrc = &comp_gauss[0];
 	u16* gdst = &DSP_GaussTable[0];
 	for (;;)
 	{
@@ -199,7 +231,7 @@ void DSP_Reset()
 				}
 				break;
 		}
-	}
+	}*/
 	
 	for (i = 0; i < 256; i++)
 	{
@@ -313,10 +345,119 @@ void DSP_DecodeBRR(int nv, DSP_Voice* voice)
 	//*(vu32*)0x0400010C = 0x00000000;
 }
 
+// volume envelope update funcs
+
+void DSP_Env_Attack(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->AttackRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume += (voice->AttackRate == 31) ? 1024:32;
+	if (voice->EnvVolume >= 0x7E0)
+	{
+		if (voice->EnvVolume >= 0x800)
+			voice->EnvVolume = 0x7FF;
+		//voice->EnvFunc = DSP_Env_Decay;
+	}
+}
+
+void DSP_Env_Decay(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->DecayRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume -= ((voice->EnvVolume - 1) >> 8) + 1;
+	if (voice->EnvVolume <= voice->SustainLevel)
+	{
+		voice->EnvFunc = DSP_Env_Sustain;
+	}
+}
+
+void DSP_Env_Sustain(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->SustainRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume -= ((voice->EnvVolume - 1) >> 8) + 1;
+	if (voice->EnvVolume < 0)
+	{
+		// what are we supposed to do here
+		voice->EnvVolume = 0;
+		voice->Status = 0;
+	}
+}
+
+void DSP_Env_Release(DSP_Voice* voice)
+{
+	voice->EnvVolume -= 8;
+	if (voice->EnvVolume < 0)
+	{
+		voice->EnvVolume = 0;
+		voice->Status = 0;
+	}
+}
+
+void DSP_Env_LinDecrease(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->GainRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume -= 32;
+	if (voice->EnvVolume < 0)
+	{
+		voice->EnvVolume = 0;
+		voice->Status = 0;
+	}
+}
+
+void DSP_Env_ExpDecrease(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->GainRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume -= ((voice->EnvVolume - 1) >> 8) + 1;
+	if (voice->EnvVolume < 0)
+	{
+		voice->EnvVolume = 0;
+		voice->Status = 0;
+	}
+}
+
+void DSP_Env_LinIncrease(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->GainRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume += 32;
+	if (voice->EnvVolume >= 0x800)
+	{
+		voice->EnvVolume = 0x7FF;
+	}
+}
+
+void DSP_Env_BentIncrease(DSP_Voice* voice)
+{
+	if (voice->EnvCounter < DSP_RateTable[voice->GainRate])
+		return;
+	
+	voice->EnvCounter = 0;
+	voice->EnvVolume += (voice->EnvVolume < 0x600) ? 32:8;
+	if (voice->EnvVolume >= 0x800)
+	{
+		voice->EnvVolume = 0x7FF;
+	}
+}
+
 void DSP_Mix()
 {
 	int i, j;
-	
+
 	//brrtime = 0;
 	//*(vu32*)0x04000108 = 0x00800000;
 	
@@ -354,7 +495,12 @@ void DSP_Mix()
 				samp = ((samp * interp) + (sbuf[_pos-1] * (0xFF-interp))) >> 8;
 			}
 			
-			// TODO: apply ADSR here
+			//samp = (samp * voice->EnvVolume) >> 11;
+			if (voice->EnvFunc) 
+			{
+				(*voice->EnvFunc)(voice);
+				voice->EnvCounter++;
+			}
 			
 			*lbuf = DSP_Clamp(*lbuf + ((samp * voice->LeftVolume) >> 7));
 			*rbuf = DSP_Clamp(*rbuf + ((samp * voice->RightVolume) >> 7));
@@ -381,7 +527,8 @@ void DSP_Mix()
 					}
 					else
 					{
-						// TODO proper ADSR release
+						// release at rate -0x800 would be the same as
+						// immediately stopping
 						voice->Status = 0;
 						break;
 					}
@@ -451,6 +598,27 @@ void DSP_Write(u8 reg, u8 val)
 			voice->CurBlockVal = SPC_RAM[voice->CurAddr];
 			//voice->CurSample = -1;
 			
+			if (voice->EnvMode == 0x1)
+			{
+				switch (voice->GainMode)
+				{
+					case 0: voice->EnvFunc = DSP_Env_LinDecrease; break;
+					case 1: voice->EnvFunc = DSP_Env_ExpDecrease; break;
+					case 2: voice->EnvFunc = DSP_Env_LinIncrease; break;
+					case 3: voice->EnvFunc = DSP_Env_BentIncrease; break;
+				}
+			}
+			else if (voice->EnvMode == 0x0)
+			{
+				voice->EnvFunc = 0;
+				voice->EnvVolume = voice->FixedVol;
+			}
+			else
+			{
+				voice->EnvFunc = DSP_Env_Attack;
+			}
+			voice->EnvCounter = 0;
+			
 			DSP_DecodeBRR(i, voice);
 			voice->Status = 1;
 		}
@@ -462,8 +630,8 @@ void DSP_Write(u8 reg, u8 val)
 			if (!(val & (1 << i))) continue;
 			
 			DSP_Voice* voice = &DSP_Voices[i];
+			//voice->EnvFunc = DSP_Env_Release;
 			voice->Status = 0;
-			// TODO proper ADSR release
 		}
 	}
 	else if (reg == 0x7C)
@@ -492,6 +660,31 @@ void DSP_Write(u8 reg, u8 val)
 				voice->Pitch &= 0x00FF;
 				voice->Pitch |= ((val & 0x3F) << 8);
 				voice->FinalPitch = voice->Pitch + (voice->Pitch / 3);
+				break;
+				
+			case 0x05:
+				if (val & 0x80) voice->EnvMode |= 0x2;
+				else voice->EnvMode &= ~0x2;
+				voice->AttackRate = ((val & 0x0F) << 1) + 1;
+				voice->DecayRate = ((val & 0x70) >> 3) + 16;
+				break;
+			case 0x06:
+				voice->SustainRate = val & 0x1F;
+				voice->SustainLevel = ((val >> 5) + 1) << 8;
+				break;
+				
+			case 0x07:
+				if (val & 0x80) 
+				{
+					voice->EnvMode |= 0x1;
+					voice->GainRate = val & 0x1F;
+					voice->GainMode = (val & 0x60) >> 5;
+				}
+				else
+				{
+					voice->EnvMode &= ~0x1;
+					voice->FixedVol = (val & 0x7F) << 4;
+				}
 				break;
 		}
 	}

@@ -19,6 +19,8 @@
 #include <nds.h>
 
 #include "spc700.h"
+#include "dsp.h"
+#include "mixrate.h"
 
 
 IPCStruct* IPC = 0;
@@ -29,6 +31,15 @@ void vblank()
 	if (!IPC) return;
 	
 	IPC->Input_XY = *(vu8*)0x04000136;
+}
+
+u32 cursample = 0;
+
+void DSP_Mix()
+{
+	DspMixSamplesStereo(DSPMIXBUFSIZE, &DSP_LBuffer[cursample]);
+	cursample += DSPMIXBUFSIZE;
+	cursample &= ((MIXBUFSIZE << 1) - 1);
 }
 
 
@@ -61,8 +72,8 @@ int main()
 	// set timer 0 to run at ~2000Hz
 	// (16 samples are mixed each time)
 	irqEnable(IRQ_TIMER0);
-	//*(vu16*)0x04000100 = 0xBEA0;
-	*(vu16*)0x04000100 = 0xA8C0;
+	*(vu16*)0x04000100 = 0xBEA0;
+	//*(vu16*)0x04000100 = 0xA8C0;
 	*(vu16*)0x04000102 = 0x00C0;
 	irqSet(IRQ_TIMER0, DSP_Mix);
 
@@ -75,6 +86,7 @@ int main()
 			{
 				case 1:
 					SPC_Reset();
+					cursample = 0;
 					break;
 				
 				case 2:

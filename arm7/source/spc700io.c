@@ -19,6 +19,7 @@
 #include <nds.h>
 
 #include "spc700.h"
+#include "dsp.h"
 
 
 struct SPC_TimersStruct
@@ -63,7 +64,7 @@ void SPC_InitMisc()
 	SPC_Timers.Timer[2].Reload = 0;
 	SPC_Timers.Timer[2].Val = 0;
 	
-	DSP_Reset();
+	DspReset();
 	
 	speedhaxed = false;
 }
@@ -76,7 +77,7 @@ u8 SPC_IORead8(u16 addr)
 	switch (addr)
 	{
 		case 0xF2: ret = SPC_DSPAddr; break;
-		case 0xF3: ret = DSP_Read(SPC_DSPAddr); break;
+		case 0xF3: ret = DSP_MEM[SPC_DSPAddr]; break;
 		
 		case 0xF4: ret = IPC->SPC_IOPorts[0]; break;
 		case 0xF5: ret = IPC->SPC_IOPorts[1]; break;
@@ -137,7 +138,7 @@ void SPC_IOWrite8(u16 addr, u8 val)
 			break;
 			
 		case 0xF2: SPC_DSPAddr = val; break;
-		case 0xF3: DSP_Write(SPC_DSPAddr, val); break;
+		case 0xF3: DspWriteByte(val, SPC_DSPAddr); break;
 			
 		case 0xF4: IPC->SPC_IOPorts[4] = val; break;
 		case 0xF5: IPC->SPC_IOPorts[5] = val; break;

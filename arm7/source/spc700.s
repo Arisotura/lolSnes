@@ -320,9 +320,8 @@ SPC_Run:
 	stmdb sp!, {r0}
 	
 frameloop:
-	ldr r0, =0x2AA
 	ldr r12, [sp]
-	add r12, r12, r0
+	add r12, r12, #0x200
 	str r12, [sp]
 		
 bigemuloop:

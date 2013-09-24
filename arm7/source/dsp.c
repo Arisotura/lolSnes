@@ -141,6 +141,9 @@ void DspReset() {
 	
 	*(vu32*)0x04000400 = 0xA800007F;
 	*(vu32*)0x04000410 = 0xA87F007F;
+	
+	// make sure we don't write sound data at the position hardware is reading from
+	swiDelay(((0x10000 - timerval) * MIXBUFSIZE) >> 2);
 }
 
 void DspSetChannelVolume(u32 channel) {

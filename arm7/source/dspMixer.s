@@ -87,6 +87,10 @@ DecodeSampleBlockAsm:
 doDecode:
     stmfd sp!, {r3}
 */
+
+	ldrh r4, [r14, #54]
+	strh r4, [r14, #22]
+	
     @ Load prev0 and prev1
     ldrsh PREV0, [r14, #62]
     ldrsh PREV1, [r14, #64]
@@ -279,6 +283,7 @@ doneDecodeCached:
     @ Store prev0 and prev1
     strh PREV0, [r14, #62]
     strh PREV1, [r14, #64]
+	@strh PREV0, [r14, #22]
 
     ldmfd sp!, {r4-r12,r14}
     bx lr
@@ -597,6 +602,17 @@ noSampleUpdate:
     mov r12, SAMPLE_POS, lsr #12
     add r12, r0, r12, lsl #1
     ldrsh r8, [r12, #DECODED_OFFSET]
+	
+	@ interpolate
+	@ final = ((final * pos4-11) + (finalprev * (255 - pos4-11))) >> 8
+	and r9, SAMPLE_POS, #0xFF0
+	sub r12, r12, #2
+	ldrsh r12, [r12, #DECODED_OFFSET]
+	mul r14, r8, r9
+	rsb r9, r9, #0xFF0
+	mla r14, r12, r9, r14
+	mov r8, r14, asr #12
+	
 
 /*
 branchLocation:

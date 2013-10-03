@@ -196,6 +196,8 @@ int main(void)
 	defaultExceptionHandler();
 	
 	irqEnable(IRQ_VBLANK);
+	irqEnable(IRQ_HBLANK);
+	
 	irqSet(IRQ_VBLANK, vblank_idle);
 	
 	fifoSetValue32Handler(FIFO_USER_02, arm7print, NULL);
@@ -283,6 +285,7 @@ int main(void)
 				fifoSendValue32(FIFO_USER_01, 2);
 				
 				irqSet(IRQ_VBLANK, vblank);
+				irqSet(IRQ_HBLANK, PPU_HBlank);
 
 				swiWaitForVBlank();
 				CPU_Run();

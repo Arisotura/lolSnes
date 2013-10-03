@@ -29,6 +29,7 @@
 
 #define BG_CHR_BASE		0x06000000
 #define BG_SCR_BASE		0x06040000
+#define BG_M7_BASE		0x06048000
 #define OBJ_BASE		0x06400000
 #define BG_PAL_BASE		0x06890000
 
@@ -113,6 +114,7 @@ PPU_Background PPU_BG[4];
 
 u16 PPU_MasterBright;
 u8 PPU_Mode;
+u8 PPU_LastNon7Mode;
 u8 PPU_BG3Prio;
 
 u8 PPU_BGMain, PPU_BGSub;
@@ -179,6 +181,18 @@ s32 PPU_MulResult;
 u32 Mem_WRAMAddr;
 
 
+// per-scanline change support
+
+typedef struct
+{
+	void (*Action)(u32);
+	u32 Data;
+	
+} PPU_LineChange;
+PPU_LineChange PPU_LineChanges[193][16];
+u8 PPU_NumLineChanges[193];
+
+
 void PPU_Reset()
 {
 	int i;
@@ -239,8 +253,16 @@ void PPU_Reset()
 	}
 	
 	
+	for (i = 0; i < 193; i++)
+	{
+		PPU_LineChanges[i][0].Action = 0;
+		PPU_NumLineChanges[i] = 0;
+	}
+	
+	
 	PPU_MasterBright = 0;
 	PPU_Mode = -1;
+	PPU_LastNon7Mode = -2;
 	PPU_BG3Prio = 0;
 	
 	PPU_BGMain = 0;
@@ -286,6 +308,51 @@ void PPU_Reset()
 	
 	
 	printf("vram = %08X | %08X\n", (u32)&PPU_VRAM, (u32)&PPU_VRAMMap);
+}
+
+
+void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
+{
+	s16 vcount = PPU_VCount + 1 - PPU_YOffset;
+	if (vcount < 0 || vcount > 191) vcount = 192;
+	
+	u8 nchanges = PPU_NumLineChanges[vcount];
+	PPU_LineChange* change = &PPU_LineChanges[vcount][nchanges];
+	change->Action = action;
+	change->Data = data;
+	if (nchanges < 15)
+		PPU_NumLineChanges[vcount]++;
+}
+
+void PPU_ResetLineChanges()
+{
+	int i;
+	
+	for (i = 0; i < 192; i += 4)
+		*(u32*)&PPU_NumLineChanges[i] = 0;
+	PPU_NumLineChanges[192] = 0;
+}
+
+inline void PPU_DoLineChanges(u32 line)
+{
+	int i;
+	register u8 limit = PPU_NumLineChanges[line];
+	register PPU_LineChange* change = &PPU_LineChanges[line][0];
+	
+	for (i = 0; i < limit; i++)
+	{
+		(*(change->Action))(change->Data);
+		change++;
+	}
+}
+
+
+void PPU_WriteReg16(u32 data)
+{
+	u16 val = data & 0xFFFF;
+	u32 reg = 0x04000000 | (data >> 16);
+	
+	*(vu16*)reg = val;
 }
 
 
@@ -553,7 +620,33 @@ void PPU_ModeChange(u8 newmode)
 	int i;
 	
 	if (newmode == PPU_Mode) return;
+	
+	if ((PPU_Mode == 7) ^ (newmode == 7))
+	{
+		PPU_Mode = newmode;
+		
+		if (newmode == 7)
+		{
+			// switch to mode 7
+			*(u32*)0x04000000 = 0x00010002 | (4 << 24) | (4 << 27) | (((PPU_BGMain | PPU_BGSub) & 0x3) << 10);
+			*(u16*)0x0400000C = 0xC082 | (2 << 2) | (24 << 8);
+			//*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
+			
+			return;
+		}
+		
+		// switch from mode 7
+		*(u32*)0x04000000 = 0x40010000 | (4 << 27) | ((PPU_BGMain | PPU_BGSub) << 8);
+		*(u16*)0x04000008 = 0x0080 | (0 << 4) | (0 << 10);
+		*(u16*)0x0400000A = 0x0081 | (1 << 4) | (1 << 10);
+		*(u16*)0x0400000C = 0x0082 | (2 << 4) | (2 << 10);
+		*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
+
+		if (PPU_LastNon7Mode == newmode) return;
+	}
+	
 	PPU_Mode = newmode;
+	PPU_LastNon7Mode = newmode;
 	
 	for (i = 0; i < 32; i++)
 		PPU_VRAMMap[i].ChrUsage &= 0xF0;
@@ -599,6 +692,7 @@ inline void PPU_SetXScroll(int nbg, u8 val)
 		bg->ScrollX &= 0xFF;
 		bg->ScrollX |= ((val & 0x1F) << 8);
 		//*(u16*)(0x04000010 + (nbg<<2)) = bg->ScrollX;
+		PPU_ScheduleLineChange(PPU_WriteReg16, 0x100000 | (nbg<<18) | bg->ScrollX);
 	}
 }
 
@@ -613,6 +707,7 @@ inline void PPU_SetYScroll(int nbg, u8 val)
 		bg->ScrollY &= 0xFF;
 		bg->ScrollY |= ((val & 0x1F) << 8);
 		//*(u16*)(0x04000012 + (nbg<<2)) = bg->ScrollY + PPU_YOffset;
+		PPU_ScheduleLineChange(PPU_WriteReg16, 0x120000 | (nbg<<18) | (bg->ScrollY + PPU_YOffset));
 	}
 }
 
@@ -704,7 +799,7 @@ inline void PPU_SetOBJCHR(u16 base, u16 gap)
 	}
 }
 
-inline void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
+void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
 	addr -= bg->ChrBase;
@@ -766,7 +861,7 @@ inline void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 	}
 }
 
-inline void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 stile)
+void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 stile)
 {
 	u16 dtile = stile & 0x03FF;
 		
@@ -786,7 +881,7 @@ inline void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 stile)
 	*(u16*)(BG_SCR_BASE + (nbg << 13) + addr - PPU_BG[nbg].ScrBase) = dtile;
 }
 
-inline void PPU_UpdateVRAM_OBJ(u32 addr, u16 val)
+void PPU_UpdateVRAM_OBJ(u32 addr, u16 val)
 {
 	addr -= PPU_OBJBase;
 	if (addr >= 8192) addr -= PPU_OBJGap;
@@ -825,6 +920,23 @@ inline void PPU_UpdateVRAM_OBJ(u32 addr, u16 val)
 	}
 }
 
+void PPU_UpdateVRAM_Mode7(u32 addr, u16 val)
+{
+	u32 tileptr = BG_M7_BASE + ((addr & 0xFFFFFFFC) >> 1);
+	u32 mapptr = tileptr + 0x4000;
+	
+	if (addr & 0x2)
+	{
+		*(u16*)tileptr = (*(u16*)tileptr & 0x00FF) | (val & 0xFF00);
+		*(u16*)mapptr = (*(u16*)mapptr & 0x00FF) | (val << 8);
+	}
+	else
+	{
+		*(u16*)tileptr = (*(u16*)tileptr & 0xFF00) | (val >> 8);
+		*(u16*)mapptr = (*(u16*)mapptr & 0xFF00) | (val & 0xFF);
+	}
+}
+
 inline void PPU_UpdateVRAM(u32 addr, u16 val)
 {
 	PPU_VRAMBlock* block = &PPU_VRAMMap[addr >> 11];
@@ -839,6 +951,8 @@ inline void PPU_UpdateVRAM(u32 addr, u16 val)
 	if (block->ScrUsage & 0x0002) PPU_UpdateVRAM_SCR(1, addr, val);
 	if (block->ScrUsage & 0x0004) PPU_UpdateVRAM_SCR(2, addr, val);
 	if (block->ScrUsage & 0x0008) PPU_UpdateVRAM_SCR(3, addr, val);
+	
+	if (addr < 0x8000) PPU_UpdateVRAM_Mode7(addr, val);
 }
 
 void PPU_UpdateOAM(u16 addr, u16 val)
@@ -1062,13 +1176,13 @@ void PPU_Write8(u32 addr, u8 val)
 			PPU_BG3Prio = ((val & 0x08) != 0) && (PPU_Mode == 1);
 			if (PPU_BG3Prio)
 			{
-				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFF0FFF0) | 0x00020001;
-				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFFFFF0);
+				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFFCFFFC) | 0x00020001;
+				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFFFFFC);
 			}
 			else
 			{
-				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFF0FFF0) | 0x00010000;
-				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFF0FFF0) | 0x00030002;
+				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFFCFFFC) | 0x00010000;
+				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFCFFFC) | 0x00030002;
 			}
 			break;
 			
@@ -1205,13 +1319,15 @@ void PPU_Write8(u32 addr, u8 val)
 		case 0x2C:
 			PPU_BGMain = val & 0x1F;
 			*(u32*)0x04000000 &= 0xFFFFE0FF;
-			*(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
+			if (PPU_Mode == 7) *(u32*)0x04000000 |= (((PPU_BGMain | PPU_BGSub) & 0x3) << 10);
+			else *(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
 			break;
 		case 0x2D:
 			// TODO subscreen handling for funky hires modes
 			PPU_BGSub = val & 0x1F;
 			*(u32*)0x04000000 &= 0xFFFFE0FF;
-			*(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
+			if (PPU_Mode == 7) *(u32*)0x04000000 |= (((PPU_BGMain | PPU_BGSub) & 0x3) << 10);
+			else *(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
 			break;
 			
 		case 0x32:
@@ -1353,12 +1469,24 @@ ITCM_CODE void PPU_VBlank()
 	}
 	
 	// update BG scroll offsets
-	*(u16*)0x04000010 = PPU_BG[0].ScrollX;
+	/**(u16*)0x04000010 = PPU_BG[0].ScrollX;
 	*(u16*)0x04000012 = PPU_BG[0].ScrollY + PPU_YOffset;
 	*(u16*)0x04000014 = PPU_BG[1].ScrollX;
 	*(u16*)0x04000016 = PPU_BG[1].ScrollY + PPU_YOffset;
 	*(u16*)0x04000018 = PPU_BG[2].ScrollX;
 	*(u16*)0x0400001A = PPU_BG[2].ScrollY + PPU_YOffset;
 	*(u16*)0x0400001C = PPU_BG[3].ScrollX;
-	*(u16*)0x0400001E = PPU_BG[3].ScrollY + PPU_YOffset;
+	*(u16*)0x0400001E = PPU_BG[3].ScrollY + PPU_YOffset;*/
+	
+	PPU_DoLineChanges(192);
+	PPU_ResetLineChanges();
+}
+
+ITCM_CODE void PPU_HBlank()
+{
+	u16 ds_vcount = *(vu16*)0x04000006 + 1;
+	if (ds_vcount >= 263) ds_vcount = 0;
+	if (ds_vcount >= 191) return;
+	
+	PPU_DoLineChanges(ds_vcount);
 }

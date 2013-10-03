@@ -21,6 +21,7 @@
 
 void PPU_Reset();
 
-void PPU_VBlank();
+ITCM_CODE void PPU_VBlank();
+ITCM_CODE void PPU_HBlank();
 
 #endif

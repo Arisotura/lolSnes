@@ -695,6 +695,14 @@ u8 Mem_GIORead8(u32 addr)
 			}
 			break;
 			
+		case 0x11:
+			if (Mem_Status->HVBFlags & 0x10)
+			{
+				ret = 0x80;
+				Mem_Status->HVBFlags &= 0xEF;
+			}
+			break;
+			
 		case 0x12:
 			ret = Mem_Status->HVBFlags & 0xC0;
 			break;

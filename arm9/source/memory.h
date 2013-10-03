@@ -26,7 +26,7 @@
 typedef struct
 {
 	u8 __pad0[3];
-	u8 HVBFlags;	// bit7: vblank | bit6: hblank | bit5: vblank (ack)
+	u8 HVBFlags;	// bit7: vblank | bit6: hblank | bit5: vblank (ack) | bit4: IRQ (ack)
 	
 	u32 SRAMDirty;
 	

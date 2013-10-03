@@ -616,6 +616,9 @@ CPU_Reset:
 	bx lr
 	
 CPU_TriggerIRQ:
+	ldrb r3, [memoryMap, #-0x5]
+	orr r3, r3, #0x10
+	strb r3, [memoryMap, #-0x5]
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	mov r2, snesS, lsl #0x3

@@ -101,6 +101,45 @@ u16 Mem_DivA = 0;
 u16 Mem_DivRes = 0;
 
 
+void ROM_ApplySpeedHacks(int banknum, u8* bank)
+{
+	int i;
+	int bsize = Mem_HiROM ? 0x10000 : 0x8000;
+
+	for (i = 2; i < bsize;)
+	{
+		//if (bank[i] == 0xA5 && bank[i+2] == 0xF0 && bank[i+3] == 0xFC)
+		if (bank[i] == 0xA5 && (bank[i+2] & 0x1F) == 0x10 && bank[i+3] == 0xFC)
+		{
+			u8 branchtype = bank[i+2];
+			bank[i+2] = 0x42;
+			bank[i+3] = (bank[i+3] & 0x0F) | (branchtype & 0xF0);
+			
+			iprintf("Speed hack installed @ %02X:%04X\n", banknum, (Mem_HiROM?0:0x8000)+i);
+			
+			i += 4;
+		}
+		else if (bank[i] == 0xAD && (bank[i+3] & 0x1F) == 0x10 && bank[i+4] == 0xFB)
+		{
+			u16 addr = bank[i+1] | (bank[i+2] << 8);
+			
+			if ((addr & 0xFFF0) != 0x2140)
+			{
+				u8 branchtype = bank[i+3];
+				bank[i+3] = 0x42;
+				bank[i+4] = (bank[i+4] & 0x0F) | (branchtype & 0xF0);
+				
+				iprintf("Speed hack installed @ %02X:%04X\n", banknum, (Mem_HiROM?0:0x8000)+i);
+			}
+			
+			i += 5;
+		}
+		else
+			i++;
+	}
+}
+
+
 bool ROM_CheckHeader(u32 offset)
 {
 	if ((offset + 0x20) >= ROM_FileSize)
@@ -259,6 +298,8 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
 		}
 	}
+	
+	ROM_ApplySpeedHacks(bank, ptr);
 
 	//idx++;
 	//idx &= 7;
@@ -271,47 +312,6 @@ void ROM_DoCacheBank(int bank, int type)
 	asm("stmdb sp!, {r12}");
 	_ROM_DoCacheBank(bank, type, false);
 	asm("ldmia sp!, {r12}");
-}
-
-
-void ROM_ApplySpeedHacks()
-{
-	// TODO look into other banks? low priority I guess
-	// most games would put their main loop into bank 0
-	u8* bank = ROM_Bank0;
-	int i;
-
-	for (i = 2; i < 0x8000;)
-	{
-		//if (bank[i] == 0xA5 && bank[i+2] == 0xF0 && bank[i+3] == 0xFC)
-		if (bank[i] == 0xA5 && (bank[i+2] & 0x1F) == 0x10 && bank[i+3] == 0xFC)
-		{
-			u8 branchtype = bank[i+2];
-			bank[i+2] = 0x42;
-			bank[i+3] = (bank[i+3] & 0x0F) | (branchtype & 0xF0);
-			
-			iprintf("Speed hack installed @ 80:%04X\n", 0x8000+i);
-			
-			i += 4;
-		}
-		else if (bank[i] == 0xAD && (bank[i+3] & 0x1F) == 0x10 && bank[i+4] == 0xFB)
-		{
-			u16 addr = bank[i+1] | (bank[i+2] << 8);
-			
-			if ((addr & 0xFFF0) != 0x2140)
-			{
-				u8 branchtype = bank[i+3];
-				bank[i+3] = 0x42;
-				bank[i+4] = (bank[i+4] & 0x0F) | (branchtype & 0xF0);
-				
-				iprintf("Speed hack installed @ 80:%04X\n", 0x8000+i);
-			}
-			
-			i += 5;
-		}
-		else
-			i++;
-	}
 }
 
 
@@ -499,8 +499,6 @@ void Mem_Reset()
 	
 	ROM_Bank0 = ROM_Cache[0];
 	ROM_Bank0End = Mem_HiROM ? (ROM_Bank0 + 0x10000) : (ROM_Bank0 + 0x8000);
-	
-	ROM_ApplySpeedHacks();
 	
 	ROM_FileOffset = -1;
 	
@@ -844,8 +842,11 @@ u8 Mem_JoyRead8(u32 addr)
 	asm("stmdb sp!, {r12}");
 	
 	u8 ret = 0;
-	
-	//iprintf("joy read8 %02X\n", addr);
+
+	// this isn't proper or even nice
+	// games that actually require manual joypad I/O will fuck up
+	// but this seems to convince SMAS that there is a joystick plugged in
+	if (addr == 0x16) ret = 0x01;
 	
 	asm("ldmia sp!, {r12}");
 	return ret;

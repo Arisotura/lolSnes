@@ -34,6 +34,9 @@
 #define BG_PAL_BASE		0x06890000
 
 
+u32 PPU_Planar2Linear[16][16];
+
+
 // TODO make this configurable
 u16 PPU_YOffset = 16;
 
@@ -196,6 +199,17 @@ u8 PPU_NumLineChanges[193];
 void PPU_Reset()
 {
 	int i;
+	
+	for (i = 0; i < 256; i++)
+	{
+		int b1 = i & 0x0F, b2 = i >> 4;
+		
+		PPU_Planar2Linear[b1][b2]
+				= ((b1 & 0x08) >> 3) | ((b2 & 0x08) >> 2)
+				| ((b1 & 0x04) << 6) | ((b2 & 0x04) << 7)
+				| ((b1 & 0x02) << 15) | ((b2 & 0x02) << 16)
+				| ((b1 & 0x01) << 24) | ((b2 & 0x01) << 25);
+	}
 	
 	PPU_VCount = 0;
 	
@@ -426,7 +440,7 @@ void PPU_UploadBGChr(int nbg)
 	if (bg->ColorDepth == 4)
 	{
 		u8* bp12 = &PPU_VRAM[chrbase];
-		u16* dst = (u16*)(BG_CHR_BASE + (nbg << 16));
+		u32* dst = (u32*)(BG_CHR_BASE + (nbg << 16));
 		
 		int t;
 		for (t = 0; t < 1024; t++)
@@ -438,14 +452,8 @@ void PPU_UploadBGChr(int nbg)
 				u8 	b1 = *bp12++,
 					b2 = *bp12++;
 
-				*dst++ 	= ((b1 & 0x80) >> 7) | ((b2 & 0x80) >> 6)
-						| ((b1 & 0x40) << 2) | ((b2 & 0x40) << 3);
-				*dst++ 	= ((b1 & 0x20) >> 5) | ((b2 & 0x20) >> 4)
-						| ((b1 & 0x10) << 4) | ((b2 & 0x10) << 5);
-				*dst++ 	= ((b1 & 0x08) >> 3) | ((b2 & 0x08) >> 2)
-						| ((b1 & 0x04) << 6) | ((b2 & 0x04) << 7);
-				*dst++ 	= ((b1 & 0x02) >> 1) | (b2 & 0x02)
-						| ((b1 & 0x01) << 8) | ((b2 & 0x01) << 9);
+				*dst++ = PPU_Planar2Linear[b1 >> 4][b2 >> 4];
+				*dst++ = PPU_Planar2Linear[b1 & 0xF][b2 & 0xF];
 						
 				/*if (*(dst-4)) usage |= 0x8;
 				if (*(dst-3)) usage |= 0x4;
@@ -461,7 +469,7 @@ void PPU_UploadBGChr(int nbg)
 	{
 		u8* bp12 = &PPU_VRAM[chrbase];
 		u8* bp34 = bp12 + 16;
-		u16* dst = (u16*)(BG_CHR_BASE + (nbg << 16));
+		u32* dst = (u32*)(BG_CHR_BASE + (nbg << 16));
 		
 		int t;
 		for (t = 0; t < 1024; t++)
@@ -475,14 +483,8 @@ void PPU_UploadBGChr(int nbg)
 					b3 = *bp34++,
 					b4 = *bp34++;
 
-				*dst++ 	= ((b1 & 0x80) >> 7) | ((b2 & 0x80) >> 6) | ((b3 & 0x80) >> 5) | ((b4 & 0x80) >> 4)
-						| ((b1 & 0x40) << 2) | ((b2 & 0x40) << 3) | ((b3 & 0x40) << 4) | ((b4 & 0x40) << 5);
-				*dst++ 	= ((b1 & 0x20) >> 5) | ((b2 & 0x20) >> 4) | ((b3 & 0x20) >> 3) | ((b4 & 0x20) >> 2)
-						| ((b1 & 0x10) << 4) | ((b2 & 0x10) << 5) | ((b3 & 0x10) << 6) | ((b4 & 0x10) << 7);
-				*dst++ 	= ((b1 & 0x08) >> 3) | ((b2 & 0x08) >> 2) | ((b3 & 0x08) >> 1) | (b4 & 0x08)
-						| ((b1 & 0x04) << 6) | ((b2 & 0x04) << 7) | ((b3 & 0x04) << 8) | ((b4 & 0x04) << 9);
-				*dst++ 	= ((b1 & 0x02) >> 1) | (b2 & 0x02) | ((b3 & 0x02) << 1) | ((b4 & 0x02) << 2)
-						| ((b1 & 0x01) << 8) | ((b2 & 0x01) << 9) | ((b3 & 0x01) << 10) | ((b4 & 0x01) << 11);
+				*dst++ = PPU_Planar2Linear[b1 >> 4][b2 >> 4] | (PPU_Planar2Linear[b3 >> 4][b4 >> 4] << 2);
+				*dst++ = PPU_Planar2Linear[b1 & 0xF][b2 & 0xF] | (PPU_Planar2Linear[b3 & 0xF][b4 & 0xF] << 2);
 						
 				/*if (*(dst-4)) usage |= 0x8;
 				if (*(dst-3)) usage |= 0x4;
@@ -496,8 +498,41 @@ void PPU_UploadBGChr(int nbg)
 			bp34 += 16;
 		}
 	}
-	else
-		iprintf("Unsupported color depth %d for BG%d\n", bg->ColorDepth, nbg);
+	else if (bg->ColorDepth == 256)
+	{
+		u8* bp12 = &PPU_VRAM[chrbase];
+		u8* bp34 = bp12 + 16;
+		u8* bp56 = bp34 + 16;
+		u8* bp78 = bp56 + 16;
+		u32* dst = (u32*)(BG_CHR_BASE + (nbg << 16));
+		
+		int t;
+		for (t = 0; t < 1024; t++)
+		{
+			int y;
+			for (y = 0; y < 8; y++)
+			{
+				u8 	b1 = *bp12++,
+					b2 = *bp12++,
+					b3 = *bp34++,
+					b4 = *bp34++,
+					b5 = *bp56++,
+					b6 = *bp56++,
+					b7 = *bp78++,
+					b8 = *bp78++;
+
+				*dst++ 	= PPU_Planar2Linear[b1 >> 4][b2 >> 4] | (PPU_Planar2Linear[b3 >> 4][b4 >> 4] << 2)
+						| (PPU_Planar2Linear[b5 >> 4][b6 >> 4] << 4) | (PPU_Planar2Linear[b7 >> 4][b8 >> 4] << 6);
+				*dst++ 	= PPU_Planar2Linear[b1 & 0xF][b2 & 0xF] | (PPU_Planar2Linear[b3 & 0xF][b4 & 0xF] << 2)
+						| (PPU_Planar2Linear[b5 & 0xF][b6 & 0xF] << 4) | (PPU_Planar2Linear[b7 & 0xF][b8 & 0xF] << 6);
+			}
+			
+			bp12 += 48;
+			bp34 += 48;
+			bp56 += 48;
+			bp78 += 48;
+		}
+	}
 }
 
 void PPU_UploadBGScr(int nbg)
@@ -667,6 +702,13 @@ void PPU_ModeChange(u8 newmode)
 			PPU_SetBGColorDepth(3, 0);
 			break;
 			
+		case 2:
+			PPU_SetBGColorDepth(0, 16);
+			PPU_SetBGColorDepth(1, 16);
+			PPU_SetBGColorDepth(2, 0);	// TODO OFFSET PER TILE
+			PPU_SetBGColorDepth(3, 0);
+			break;
+			
 		case 3:
 			PPU_SetBGColorDepth(0, 256);
 			PPU_SetBGColorDepth(1, 16);
@@ -810,14 +852,8 @@ void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 		vramptr += (addr & 0xFFFFFFF0) << 2;
 		vramptr += (addr & 0xE) << 2;
 		
-		*(u16*)vramptr = ((val & 0x0040) << 2) | ((val & 0x4000) >> 5) | 
-								((val & 0x0080) >> 7) | ((val & 0x8000) >> 14);
-		*(u16*)(vramptr + 2) = ((val & 0x0010) << 4) | ((val & 0x1000) >> 3) | 
-								((val & 0x0020) >> 5) | ((val & 0x2000) >> 12);
-		*(u16*)(vramptr + 4) = ((val & 0x0004) << 6) | ((val & 0x0400) >> 1) | 
-								((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
-		*(u16*)(vramptr + 6) = ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | 
-								((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
+		*(u32*)vramptr = PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12];
+		*(u32*)(vramptr + 4) = PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8];
 								
 		/*u32 usage = PPU_TileUsage[nbg][addr >> 4];
 		int shift = (addr & 0xE) << 1;
@@ -834,30 +870,42 @@ void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 		
 		if (addr & 0x10)
 		{
-			*(u16*)vramptr = ((*(u16*)vramptr) & 0xF3F3) | ((val & 0x0040) << 4) | 
-							((val & 0x4000) >> 3) | ((val & 0x0080) >> 5) | ((val & 0x8000) >> 12);
-			*(u16*)(vramptr + 2) = ((*(u16*)(vramptr + 2)) & 0xF3F3) | ((val & 0x0010) << 6) | 
-							((val & 0x1000) >> 1) | ((val & 0x0020) >> 3) | ((val & 0x2000) >> 10);
-			*(u16*)(vramptr + 4) = ((*(u16*)(vramptr + 4)) & 0xF3F3) | ((val & 0x0004) << 8) | 
-							((val & 0x0400) << 1) | ((val & 0x0008) >> 1) | ((val & 0x0800) >> 8);
-			*(u16*)(vramptr + 6) = ((*(u16*)(vramptr + 6)) & 0xF3F3) | ((val & 0x0001) << 10) | 
-							((val & 0x0100) << 3) | ((val & 0x0002) << 1) | ((val & 0x0200) >> 6);
+			*(u32*)vramptr = (*(u32*)vramptr & 0xF3F3F3F3) | (PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12] << 2);
+			*(u32*)(vramptr + 4) = (*(u32*)(vramptr + 4) & 0xF3F3F3F3) | (PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8] << 2);
 		}
 		else
 		{
-			*(u16*)vramptr = ((*(u16*)vramptr) & 0xFCFC) | ((val & 0x0040) << 2) | ((val & 0x4000) >> 5) | 
-							((val & 0x0080) >> 7) | ((val & 0x8000) >> 14);
-			*(u16*)(vramptr + 2) = ((*(u16*)(vramptr + 2)) & 0xFCFC) | ((val & 0x0010) << 4) | ((val & 0x1000) >> 3) | 
-							((val & 0x0020) >> 5) | ((val & 0x2000) >> 12);
-			*(u16*)(vramptr + 4) = ((*(u16*)(vramptr + 4)) & 0xFCFC) | ((val & 0x0004) << 6) | ((val & 0x0400) >> 1) | 
-							((val & 0x0008) >> 3) | ((val & 0x0800) >> 10);
-			*(u16*)(vramptr + 6) = ((*(u16*)(vramptr + 6)) & 0xFCFC) | ((val & 0x0001) << 8) | ((val & 0x0100) << 1) | 
-							((val & 0x0002) >> 1) | ((val & 0x0200) >> 8);
+			*(u32*)vramptr = (*(u32*)vramptr & 0xFCFCFCFC) | PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12];
+			*(u32*)(vramptr + 4) = (*(u32*)(vramptr + 4) & 0xFCFCFCFC) | PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8];
 		}
 	}
-	else
+	else if (bg->ColorDepth == 256)
 	{
-		// TODO
+		vramptr += addr & 0xFFFFFFC0;
+		vramptr += (addr & 0xE) << 2;
+		
+		switch (addr & 0x30)
+		{
+			case 0x00:
+				*(u32*)vramptr = (*(u32*)vramptr & 0xFCFCFCFC) | PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12];
+				*(u32*)(vramptr + 4) = (*(u32*)(vramptr + 4) & 0xFCFCFCFC) | PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8];
+				break;
+			
+			case 0x10:
+				*(u32*)vramptr = (*(u32*)vramptr & 0xF3F3F3F3) | (PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12] << 2);
+				*(u32*)(vramptr + 4) = (*(u32*)(vramptr + 4) & 0xF3F3F3F3) | (PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8] << 2);
+				break;
+				
+			case 0x20:
+				*(u32*)vramptr = (*(u32*)vramptr & 0xCFCFCFCF) | (PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12] << 4);
+				*(u32*)(vramptr + 4) = (*(u32*)(vramptr + 4) & 0xCFCFCFCF) | (PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8] << 4);
+				break;
+				
+			case 0x30:
+				*(u32*)vramptr = (*(u32*)vramptr & 0x3F3F3F3F) | (PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12] << 6);
+				*(u32*)(vramptr + 4) = (*(u32*)(vramptr + 4) & 0x3F3F3F3F) | (PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8] << 6);
+				break;
+		}
 	}
 }
 

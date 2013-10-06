@@ -117,6 +117,7 @@ PPU_Background PPU_BG[4];
 
 u16 PPU_MasterBright;
 u8 PPU_Mode;
+u8 PPU_ModeNow;
 u8 PPU_LastNon7Mode;
 u8 PPU_BG3Prio;
 
@@ -180,6 +181,10 @@ s16 PPU_MulA;
 s8 PPU_MulB;
 s32 PPU_MulResult;
 
+int PPU_M7RefDirty = 0;
+s16 PPU_M7RefX, PPU_M7RefY;
+s16 PPU_M7A, PPU_M7B, PPU_M7C, PPU_M7D;
+
 
 u32 Mem_WRAMAddr;
 
@@ -196,6 +201,7 @@ PPU_LineChange PPU_LineChanges[193][16];
 u8 PPU_NumLineChanges[193];
 
 
+
 void PPU_Reset()
 {
 	int i;
@@ -210,6 +216,10 @@ void PPU_Reset()
 				| ((b1 & 0x02) << 15) | ((b2 & 0x02) << 16)
 				| ((b1 & 0x01) << 24) | ((b2 & 0x01) << 25);
 	}
+	
+	PPU_M7RefDirty = 0;
+	PPU_M7RefX = 0;
+	PPU_M7RefY = 0;
 	
 	PPU_VCount = 0;
 	
@@ -318,6 +328,7 @@ void PPU_Reset()
 	*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
 	
 	
+	PPU_ModeNow = 0;
 	PPU_ModeChange(0);
 	
 	
@@ -367,6 +378,66 @@ void PPU_WriteReg16(u32 data)
 	u32 reg = 0x04000000 | (data >> 16);
 	
 	*(vu16*)reg = val;
+	if ((reg & 0x3FC) == 0x10) PPU_M7RefDirty = 1;
+}
+
+void PPU_HandleModeChange(u32 val)
+{
+	if (val & 0xF0) iprintf("!! 16x16 TILES NOT SUPPORTED\n");
+	PPU_ModeChange(val & 0x07);
+	
+	// if high prio is given to BG3 frontmost tiles, assume BG3 
+	// is used for game HUD, and move it forward
+	// TODO get rid of this awful hack! 'normal' mode doesn't even work right
+	PPU_BG3Prio = ((val & 0x08) != 0) && (PPU_Mode == 1);
+	//if (PPU_BG3Prio)
+	{
+		*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFFCFFFC) | 0x00020001;
+		*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFFFFFC);
+	}
+	/*else
+	{
+		*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFFCFFFC) | 0x00010000;
+		*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFCFFFC) | 0x00030002;
+	}*/
+}
+
+void PPU_SetM7A(u32 val)
+{
+	PPU_M7A = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7B(u32 val)
+{
+	PPU_M7B = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7C(u32 val)
+{
+	PPU_M7C = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7D(u32 val)
+{
+	PPU_M7D = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7RefX(u32 val)
+{
+	if (val & 0x1000) val |= 0xE000;
+	PPU_M7RefX = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7RefY(u32 val)
+{
+	if (val & 0x1000) val |= 0xE000;
+	PPU_M7RefY = val;
+	PPU_M7RefDirty = 1;
 }
 
 
@@ -659,11 +730,12 @@ void PPU_ModeChange(u8 newmode)
 	if ((PPU_Mode == 7) ^ (newmode == 7))
 	{
 		PPU_Mode = newmode;
+		u8 bgenable = (PPU_BGMain | PPU_BGSub);
 		
 		if (newmode == 7)
 		{
 			// switch to mode 7
-			*(u32*)0x04000000 = 0x00010002 | (4 << 24) | (4 << 27) | (((PPU_BGMain | PPU_BGSub) & 0x3) << 10);
+			*(u32*)0x04000000 = 0x00010002 | (4 << 24) | (4 << 27) | ((bgenable & 0x01) ? 0x400:0) | ((bgenable & 0x10) ? 0x1000:0);
 			*(u16*)0x0400000C = 0xC082 | (2 << 2) | (24 << 8);
 			//*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
 			
@@ -671,7 +743,7 @@ void PPU_ModeChange(u8 newmode)
 		}
 		
 		// switch from mode 7
-		*(u32*)0x04000000 = 0x40010000 | (4 << 27) | ((PPU_BGMain | PPU_BGSub) << 8);
+		*(u32*)0x04000000 = 0x40010000 | (4 << 27) | (bgenable << 8);
 		*(u16*)0x04000008 = 0x0080 | (0 << 4) | (0 << 10);
 		*(u16*)0x0400000A = 0x0081 | (1 << 4) | (1 << 10);
 		*(u16*)0x0400000C = 0x0082 | (2 << 4) | (2 << 10);
@@ -785,8 +857,11 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 		PPU_UploadBGScr(nbg);
 	}
 	
-	u16* bgctrl = (u16*)(0x04000008 + (nbg << 1));
-	*bgctrl = (*bgctrl & 0xFFFF3FFF) | ((val & 0x03) << 14);
+	if (PPU_ModeNow != 7)
+	{
+		u16* bgctrl = (u16*)(0x04000008 + (nbg << 1));
+		*bgctrl = (*bgctrl & 0xFFFF3FFF) | ((val & 0x03) << 14);
+	}
 }
 
 inline void PPU_SetBGCHR(int nbg, u8 val)
@@ -1216,22 +1291,8 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x05:
-			if (val & 0xF0) iprintf("!! 16x16 TILES NOT SUPPORTED\n");
-			PPU_ModeChange(val & 0x07);
-			
-			// if high prio is given to BG3 frontmost tiles, assume BG3 
-			// is used for game HUD, and move it forward
-			PPU_BG3Prio = ((val & 0x08) != 0) && (PPU_Mode == 1);
-			if (PPU_BG3Prio)
-			{
-				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFFCFFFC) | 0x00020001;
-				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFFFFFC);
-			}
-			else
-			{
-				*(vu32*)0x04000008 = (*(vu32*)0x04000008 & 0xFFFCFFFC) | 0x00010000;
-				*(vu32*)0x0400000C = (*(vu32*)0x0400000C & 0xFFFCFFFC) | 0x00030002;
-			}
+			PPU_ModeNow = val & 0x07;
+			PPU_ScheduleLineChange(PPU_HandleModeChange, val);
 			break;
 			
 		case 0x06: // mosaic
@@ -1318,19 +1379,77 @@ void PPU_Write8(u32 addr, u8 val)
 			}
 			break;
 			
-		case 0x1B: // multiply
+		case 0x1B: // multiply/mode7 shiz
 			if (PPU_M7Old & 0x8000)
 			{
-				PPU_MulA = (s16)((PPU_M7Old & 0xFF) | (val << 8));
+				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
 				PPU_M7Old = 0;
+				
+				PPU_ScheduleLineChange(PPU_SetM7A, fval);
+				
+				PPU_MulA = (s16)fval;
 				PPU_MulResult = (s32)PPU_MulA * (s32)PPU_MulB;
 			}
 			else
 				PPU_M7Old = 0x8000 | val;
 			break;
 		case 0x1C:
+			if (PPU_M7Old & 0x8000)
+			{
+				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
+				PPU_M7Old = 0;
+				
+				PPU_ScheduleLineChange(PPU_SetM7B, fval);
+			}
+			else
+				PPU_M7Old = 0x8000 | val;
 			PPU_MulB = (s8)val;
 			PPU_MulResult = (s32)PPU_MulA * (s32)PPU_MulB;
+			break;
+		case 0x1D:
+			if (PPU_M7Old & 0x8000)
+			{
+				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
+				PPU_M7Old = 0;
+				
+				PPU_ScheduleLineChange(PPU_SetM7C, fval);
+			}
+			else
+				PPU_M7Old = 0x8000 | val;
+			break;
+		case 0x1E:
+			if (PPU_M7Old & 0x8000)
+			{
+				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
+				PPU_M7Old = 0;
+				
+				PPU_ScheduleLineChange(PPU_SetM7D, fval);
+			}
+			else
+				PPU_M7Old = 0x8000 | val;
+			break;
+			
+		case 0x1F: // mode7 center
+			if (PPU_M7Old & 0x8000)
+			{
+				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
+				PPU_M7Old = 0;
+				
+				PPU_ScheduleLineChange(PPU_SetM7RefX, fval);
+			}
+			else
+				PPU_M7Old = 0x8000 | val;
+			break;
+		case 0x20:
+			if (PPU_M7Old & 0x8000)
+			{
+				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
+				PPU_M7Old = 0;
+				
+				PPU_ScheduleLineChange(PPU_SetM7RefY, fval);
+			}
+			else
+				PPU_M7Old = 0x8000 | val;
 			break;
 			
 		case 0x21:
@@ -1516,16 +1635,6 @@ ITCM_CODE void PPU_VBlank()
 		}
 	}
 	
-	// update BG scroll offsets
-	/**(u16*)0x04000010 = PPU_BG[0].ScrollX;
-	*(u16*)0x04000012 = PPU_BG[0].ScrollY + PPU_YOffset;
-	*(u16*)0x04000014 = PPU_BG[1].ScrollX;
-	*(u16*)0x04000016 = PPU_BG[1].ScrollY + PPU_YOffset;
-	*(u16*)0x04000018 = PPU_BG[2].ScrollX;
-	*(u16*)0x0400001A = PPU_BG[2].ScrollY + PPU_YOffset;
-	*(u16*)0x0400001C = PPU_BG[3].ScrollX;
-	*(u16*)0x0400001E = PPU_BG[3].ScrollY + PPU_YOffset;*/
-	
 	PPU_DoLineChanges(192);
 	PPU_ResetLineChanges();
 }
@@ -1537,4 +1646,23 @@ ITCM_CODE void PPU_HBlank()
 	if (ds_vcount >= 191) return;
 	
 	PPU_DoLineChanges(ds_vcount);
+	
+	// recalculate mode 7 ref point if needed
+	// (ref point depends on center, scroll and A/B/C/D)
+	if (PPU_Mode == 7 && PPU_M7RefDirty)
+	{
+		PPU_M7RefDirty = 0;
+		
+		u16 xscroll = PPU_BG[0].ScrollX;
+		u16 yscroll = PPU_BG[0].ScrollY + PPU_YOffset;
+		
+		*(vu16*)0x04000018 = xscroll;
+		*(vu16*)0x0400001A = yscroll;
+		*(vs16*)0x04000020 = PPU_M7A;
+		*(vs16*)0x04000022 = PPU_M7B;
+		*(vs16*)0x04000024 = PPU_M7C;
+		*(vs16*)0x04000026 = PPU_M7D;
+		*(vs32*)0x04000028 = (PPU_M7RefX << 8) + (PPU_M7A * (-PPU_M7RefX + xscroll)) + (PPU_M7B * (-PPU_M7RefY + yscroll + ds_vcount));
+		*(vs32*)0x0400002C = (PPU_M7RefY << 8) + (PPU_M7C * (-PPU_M7RefX + xscroll)) + (PPU_M7D * (-PPU_M7RefY + yscroll + ds_vcount));
+	}
 }

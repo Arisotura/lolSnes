@@ -175,7 +175,7 @@ u16 PPU_OBJPrio[8][4] =
 };
 
 
-u16 PPU_M7Old;
+u8 PPU_M7Old;
 
 s16 PPU_MulA;
 s8 PPU_MulB;
@@ -183,6 +183,7 @@ s32 PPU_MulResult;
 
 int PPU_M7RefDirty = 0;
 s16 PPU_M7RefX, PPU_M7RefY;
+s16 PPU_M7ScrollX, PPU_M7ScrollY;
 s16 PPU_M7A, PPU_M7B, PPU_M7C, PPU_M7D;
 
 
@@ -191,13 +192,15 @@ u32 Mem_WRAMAddr;
 
 // per-scanline change support
 
+#define MAX_LINE_CHANGES 20
+
 typedef struct
 {
 	void (*Action)(u32);
 	u32 Data;
 	
 } PPU_LineChange;
-PPU_LineChange PPU_LineChanges[193][16];
+PPU_LineChange PPU_LineChanges[193][MAX_LINE_CHANGES];
 u8 PPU_NumLineChanges[193];
 
 
@@ -336,16 +339,35 @@ void PPU_Reset()
 }
 
 
+void PPU_WriteReg16(u32 data);
+
+
 void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 {
 	s16 vcount = PPU_VCount + 1 - PPU_YOffset;
 	if (vcount < 0 || vcount > 191) vcount = 192;
 	
+	// if the last change was the same thing, just overwrite its data with the new one
+	// TODO make this less ugly
 	u8 nchanges = PPU_NumLineChanges[vcount];
-	PPU_LineChange* change = &PPU_LineChanges[vcount][nchanges];
+	PPU_LineChange* change;
+	if (nchanges > 0)
+	{
+		change = &PPU_LineChanges[vcount][nchanges - 1];
+		if (change->Action == action && action != PPU_WriteReg16)
+		{
+			change->Data = data;
+			return;
+		}
+		
+		change++;
+	}
+	else
+		change = &PPU_LineChanges[vcount][nchanges];
+	
 	change->Action = action;
 	change->Data = data;
-	if (nchanges < 15)
+	if (nchanges < (MAX_LINE_CHANGES-1))
 		PPU_NumLineChanges[vcount]++;
 }
 
@@ -437,6 +459,20 @@ void PPU_SetM7RefY(u32 val)
 {
 	if (val & 0x1000) val |= 0xE000;
 	PPU_M7RefY = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7ScrollX(u32 val)
+{
+	if (val & 0x1000) val |= 0xE000;
+	PPU_M7ScrollX = val;
+	PPU_M7RefDirty = 1;
+}
+
+void PPU_SetM7ScrollY(u32 val)
+{
+	if (val & 0x1000) val |= 0xE000;
+	PPU_M7ScrollY = val;
 	PPU_M7RefDirty = 1;
 }
 
@@ -797,6 +833,12 @@ void PPU_ModeChange(u8 newmode)
 
 inline void PPU_SetXScroll(int nbg, u8 val)
 {
+	if (nbg == 0)
+	{
+		PPU_ScheduleLineChange(PPU_SetM7ScrollX, (val << 8) | PPU_M7Old);
+		PPU_M7Old = val;
+	}
+	
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	if (!(bg->ScrollX & 0x8000))
@@ -805,13 +847,19 @@ inline void PPU_SetXScroll(int nbg, u8 val)
 	{
 		bg->ScrollX &= 0xFF;
 		bg->ScrollX |= ((val & 0x1F) << 8);
-		//*(u16*)(0x04000010 + (nbg<<2)) = bg->ScrollX;
-		PPU_ScheduleLineChange(PPU_WriteReg16, 0x100000 | (nbg<<18) | bg->ScrollX);
+		if (PPU_ModeNow != 7)
+			PPU_ScheduleLineChange(PPU_WriteReg16, 0x100000 | (nbg<<18) | bg->ScrollX);
 	}
 }
 
 inline void PPU_SetYScroll(int nbg, u8 val)
 {
+	if (nbg == 0)
+	{
+		PPU_ScheduleLineChange(PPU_SetM7ScrollY, (val << 8) | PPU_M7Old);
+		PPU_M7Old = val;
+	}
+	
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	if (!(bg->ScrollY & 0x8000))
@@ -820,8 +868,8 @@ inline void PPU_SetYScroll(int nbg, u8 val)
 	{
 		bg->ScrollY &= 0xFF;
 		bg->ScrollY |= ((val & 0x1F) << 8);
-		//*(u16*)(0x04000012 + (nbg<<2)) = bg->ScrollY + PPU_YOffset;
-		PPU_ScheduleLineChange(PPU_WriteReg16, 0x120000 | (nbg<<18) | (bg->ScrollY + PPU_YOffset));
+		if (PPU_ModeNow != 7)
+			PPU_ScheduleLineChange(PPU_WriteReg16, 0x120000 | (nbg<<18) | (bg->ScrollY + PPU_YOffset));
 	}
 }
 
@@ -1380,76 +1428,36 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x1B: // multiply/mode7 shiz
-			if (PPU_M7Old & 0x8000)
 			{
-				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
-				PPU_M7Old = 0;
-				
-				PPU_ScheduleLineChange(PPU_SetM7A, fval);
-				
+				u16 fval = (u16)(PPU_M7Old | (val << 8));
 				PPU_MulA = (s16)fval;
 				PPU_MulResult = (s32)PPU_MulA * (s32)PPU_MulB;
+				PPU_ScheduleLineChange(PPU_SetM7A, fval);
+				PPU_M7Old = val;
 			}
-			else
-				PPU_M7Old = 0x8000 | val;
 			break;
 		case 0x1C:
-			if (PPU_M7Old & 0x8000)
-			{
-				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
-				PPU_M7Old = 0;
-				
-				PPU_ScheduleLineChange(PPU_SetM7B, fval);
-			}
-			else
-				PPU_M7Old = 0x8000 | val;
+			PPU_ScheduleLineChange(PPU_SetM7B, (val << 8) | PPU_M7Old);
+			PPU_M7Old = val;
 			PPU_MulB = (s8)val;
 			PPU_MulResult = (s32)PPU_MulA * (s32)PPU_MulB;
 			break;
 		case 0x1D:
-			if (PPU_M7Old & 0x8000)
-			{
-				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
-				PPU_M7Old = 0;
-				
-				PPU_ScheduleLineChange(PPU_SetM7C, fval);
-			}
-			else
-				PPU_M7Old = 0x8000 | val;
+			PPU_ScheduleLineChange(PPU_SetM7C, (val << 8) | PPU_M7Old);
+			PPU_M7Old = val;
 			break;
 		case 0x1E:
-			if (PPU_M7Old & 0x8000)
-			{
-				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
-				PPU_M7Old = 0;
-				
-				PPU_ScheduleLineChange(PPU_SetM7D, fval);
-			}
-			else
-				PPU_M7Old = 0x8000 | val;
+			PPU_ScheduleLineChange(PPU_SetM7D, (val << 8) | PPU_M7Old);
+			PPU_M7Old = val;
 			break;
 			
 		case 0x1F: // mode7 center
-			if (PPU_M7Old & 0x8000)
-			{
-				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
-				PPU_M7Old = 0;
-				
-				PPU_ScheduleLineChange(PPU_SetM7RefX, fval);
-			}
-			else
-				PPU_M7Old = 0x8000 | val;
+			PPU_ScheduleLineChange(PPU_SetM7RefX, (val << 8) | PPU_M7Old);
+			PPU_M7Old = val;
 			break;
 		case 0x20:
-			if (PPU_M7Old & 0x8000)
-			{
-				u16 fval = (u16)((PPU_M7Old & 0xFF) | (val << 8));
-				PPU_M7Old = 0;
-				
-				PPU_ScheduleLineChange(PPU_SetM7RefY, fval);
-			}
-			else
-				PPU_M7Old = 0x8000 | val;
+			PPU_ScheduleLineChange(PPU_SetM7RefY, (val << 8) | PPU_M7Old);
+			PPU_M7Old = val;
 			break;
 			
 		case 0x21:
@@ -1643,7 +1651,7 @@ ITCM_CODE void PPU_HBlank()
 {
 	u16 ds_vcount = *(vu16*)0x04000006 + 1;
 	if (ds_vcount >= 263) ds_vcount = 0;
-	if (ds_vcount >= 191) return;
+	if (ds_vcount >= 192) return;
 	
 	PPU_DoLineChanges(ds_vcount);
 	
@@ -1653,16 +1661,16 @@ ITCM_CODE void PPU_HBlank()
 	{
 		PPU_M7RefDirty = 0;
 		
-		u16 xscroll = PPU_BG[0].ScrollX;
-		u16 yscroll = PPU_BG[0].ScrollY + PPU_YOffset;
+		s16 xscroll = PPU_M7ScrollX;
+		s16 yscroll = PPU_M7ScrollY + PPU_YOffset;
 		
-		*(vu16*)0x04000018 = xscroll;
-		*(vu16*)0x0400001A = yscroll;
 		*(vs16*)0x04000020 = PPU_M7A;
 		*(vs16*)0x04000022 = PPU_M7B;
 		*(vs16*)0x04000024 = PPU_M7C;
 		*(vs16*)0x04000026 = PPU_M7D;
 		*(vs32*)0x04000028 = (PPU_M7RefX << 8) + (PPU_M7A * (-PPU_M7RefX + xscroll)) + (PPU_M7B * (-PPU_M7RefY + yscroll + ds_vcount));
 		*(vs32*)0x0400002C = (PPU_M7RefY << 8) + (PPU_M7C * (-PPU_M7RefX + xscroll)) + (PPU_M7D * (-PPU_M7RefY + yscroll + ds_vcount));
+		//iprintf("mode7 %04X|%04X %04X|%04X %04X|%04X|%04X|%04X\n",
+		//	xscroll, yscroll, PPU_M7RefX, PPU_M7RefY, PPU_M7A, PPU_M7B, PPU_M7C, PPU_M7D);
 	}
 }

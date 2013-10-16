@@ -46,6 +46,7 @@ u8* ROM_Cache[3 + ROMCACHE_SIZE] DTCM_BSS;
 int ROM_CacheBank[3 + ROMCACHE_SIZE] DTCM_BSS;
 u8 ROM_CacheIndex DTCM_BSS;
 int ROM_CacheInited = 0;
+u8 ROM_CacheMap[256];
 
 u8 ROM_CacheMisses[0x200];
 
@@ -209,12 +210,14 @@ void ROM_DoUncacheBank(int bank)
 			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
 		}
 	}
+	
+	ROM_CacheMap[bank] = (u8)-1;
 }
 
 void _ROM_DoCacheBank(int bank, int type, bool force)
 {
 	u8 idx;
-	
+
 	bank &= 0x7F;
 	if (Mem_HiROM && bank < 0x40) bank += 0x40;
 	
@@ -229,12 +232,19 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 		idx = Mem_HiROM ? (bank - 0x40) : bank;
 	else
 		return;
+		
+	if (ROM_CacheMap[bank] != (u8)-1) // bank already cached
+		return;
 
 	int oldbank = ROM_CacheBank[idx];
 	if (oldbank == bank)
 		return;
+		
 	if (oldbank != -1)
-		ROM_DoUncacheBank(oldbank);
+	{
+		if (ROM_CacheMap[oldbank] == idx)
+			ROM_DoUncacheBank(oldbank);
+	}
 
 	ROM_CacheBank[idx] = bank;
 	if (!ROM_Cache[idx])
@@ -298,6 +308,8 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
 		}
 	}
+	
+	ROM_CacheMap[bank] = idx;
 	
 	ROM_ApplySpeedHacks(bank, ptr);
 
@@ -406,6 +418,9 @@ void Mem_Reset()
 	{
 		for (i = 0; i < 32 + 3; i++)
 			ROM_Cache[i] = 0;
+			
+		for (i = 0; i < 256; i++)
+			ROM_CacheMap[i] = (u8)-1;
 		
 		ROM_CacheInited = 0;
 	}

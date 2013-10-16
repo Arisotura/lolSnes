@@ -272,6 +272,7 @@ void PPU_Reset()
 	{
 		PPU_Background* bg = &PPU_BG[i];
 		bg->ChrBase = 0;
+		bg->ChrSize = 0;
 		bg->ScrBase = 0;
 		bg->ColorDepth = 0;
 		
@@ -712,7 +713,7 @@ void PPU_UploadOBJChr()
 	}
 }
 
-inline void PPU_SetBGColorDepth(int nbg, int depth)
+void PPU_SetBGColorDepth(int nbg, int depth)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
 	
@@ -721,39 +722,35 @@ inline void PPU_SetBGColorDepth(int nbg, int depth)
 		int olddepth = bg->ColorDepth;
 		bg->ColorDepth = depth;
 		
+		register int bmask = (1 << nbg), nbmask = ~bmask;
+		int i, size;
+		
+		int oldsize = bg->ChrSize >> 11;
+		switch (depth)
+		{
+			case 0: bg->ChrSize = 0; break;
+			case 4: bg->ChrSize = 0x4000; break;
+			case 16: bg->ChrSize = 0x8000; break;
+			case 256: bg->ChrSize = 0x10000; break;
+		}
+		
+		size = bg->ChrSize >> 11;
+		if (size != oldsize)
+		{
+			for (i = 0; i < oldsize; i++)
+				if (((bg->ChrBase >> 11) + i) < 32)
+					PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage &= nbmask;
+			for (i = 0; i < size; i++)
+				if (((bg->ChrBase >> 11) + i) < 32)
+					PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage |= bmask;
+		}
+		
 		if (depth != 0)
 		{
-			register int bmask = (1 << nbg), nbmask = ~bmask;
-			int i, size;
-			
-			int oldsize = bg->ChrSize >> 11;
-			switch (depth)
-			{
-				case 4: bg->ChrSize = 0x4000; break;
-				case 16: bg->ChrSize = 0x8000; break;
-				case 256: bg->ChrSize = 0x10000; break;
-			}
-			
-			size = bg->ChrSize >> 11;
-			if (size != oldsize)
-			{
-				for (i = 0; i < oldsize; i++)
-					if (((bg->ChrBase >> 11) + i) < 32)
-						PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage &= nbmask;
-				for (i = 0; i < size; i++)
-					if (((bg->ChrBase >> 11) + i) < 32)
-						PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage |= bmask;
-			}
-			
 			PPU_UploadBGPal(nbg, true);
 			PPU_UploadBGChr(nbg);
 			if (olddepth == 0) PPU_UploadBGScr(nbg);
-			
-			//if (depth == 256) *(u16*)(0x04000008 + (nbg << 1)) |= 0x0080;
-			//else *(u16*)(0x04000008 + (nbg << 1)) &= 0xFFFFFF7F;
 		}
-		else
-			bg->ChrSize = 0;
 	}
 }
 
@@ -790,9 +787,6 @@ void PPU_ModeChange(u8 newmode)
 	
 	PPU_Mode = newmode;
 	PPU_LastNon7Mode = newmode;
-	
-	for (i = 0; i < 32; i++)
-		PPU_VRAMMap[i].ChrUsage &= 0xF0;
 	
 	switch (newmode)
 	{
@@ -1379,7 +1373,6 @@ void PPU_Write8(u32 addr, u8 val)
 		
 		case 0x15:
 			if ((val & 0x7C) != 0x00) iprintf("UNSUPPORTED VRAM MODE %02X\n", val);
-			//printf("vram = %08X\n", (u32)&PPU_VRAM);
 			PPU_VRAMInc = val;
 			switch (val & 0x03)
 			{

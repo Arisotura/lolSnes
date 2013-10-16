@@ -41,6 +41,7 @@ u32 PPU_Planar2Linear[16][16];
 u16 PPU_YOffset = 16;
 
 u16 PPU_VCount = 0;
+bool PPU_MissedVBlank = false;
 
 u8 PPU_CGRAMAddr = 0;
 u16 PPU_CurColor = 0xFFFF;
@@ -225,6 +226,7 @@ void PPU_Reset()
 	PPU_M7RefY = 0;
 	
 	PPU_VCount = 0;
+	PPU_MissedVBlank = false;
 	
 	PPU_CGRAMAddr = 0;
 	PPU_CurColor = 0xFFFF;
@@ -346,7 +348,21 @@ void PPU_WriteReg16(u32 data);
 void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 {
 	s16 vcount = PPU_VCount + 1 - PPU_YOffset;
-	if (vcount < 0 || vcount > 191) vcount = 192;
+	u16 ds_vcount = *(vu16*)0x04000006;
+	
+	// if the change occured during the vblank, schedule it for the DS vblank
+	// if it occured in a hidden scanline, apply it now
+	if (vcount > 191) vcount = 192;
+	else if (vcount < 0)
+	{
+		(*action)(data);
+		return;
+	}
+	
+	// if the change occured too late, apply it now, and 
+	// schedule it for the next frame to make up for the lag
+	if ((ds_vcount < 192 && ds_vcount >= vcount) || PPU_MissedVBlank)
+		(*action)(data);
 	
 	// if the last change was the same thing, just overwrite its data with the new one
 	// TODO make this less ugly
@@ -921,9 +937,11 @@ inline void PPU_SetBGCHR(int nbg, u8 val)
 		for (i = 0; i < size; i++)
 		{
 			register int oldi = (oldchrbase >> 11) + i;
-			register int newi = (bg->ChrBase >> 11) + i;
-			
 			if (oldi < 32) PPU_VRAMMap[oldi].ChrUsage &= nbmask;
+		}
+		for (i = 0; i < size; i++)
+		{
+			register int newi = (bg->ChrBase >> 11) + i;
 			if (newi < 32) PPU_VRAMMap[newi].ChrUsage |= bmask;
 		}
 		
@@ -939,15 +957,17 @@ inline void PPU_SetOBJCHR(u16 base, u16 gap)
 		for (i = 0; i < 0x8; i++)
 		{
 			register int oldi = (PPU_OBJBase >> 11) + i;
-			register int newi = (base >> 11) + i;
-			
 			if (i >= 0x4)
-			{
 				oldi += (PPU_OBJGap >> 11);
-				newi += (gap >> 11);
-			}
 			
 			if (oldi < 32) PPU_VRAMMap[oldi].ChrUsage &= 0xFFEF;
+		}
+		for (i = 0; i < 0x8; i++)
+		{
+			register int newi = (base >> 11) + i;
+			if (i >= 0x4)
+				newi += (gap >> 11);
+			
 			if (newi < 32) PPU_VRAMMap[newi].ChrUsage |= 0x0010;
 		}
 		
@@ -1567,7 +1587,12 @@ ITCM_CODE void PPU_VBlank()
 	// and our registers are likely to contain bad values
 	// (especially master brightness)
 	if (PPU_VCount < 262)
+	{
+		PPU_MissedVBlank = true;
 		return;
+	}
+	
+	PPU_MissedVBlank = false;
 	
 	*(u16*)0x0400006C = PPU_MasterBright;
 	

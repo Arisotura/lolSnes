@@ -17,20 +17,12 @@
 */
 
 #include <nds.h>
-#include <stdio.h>
-#include <fat.h>
 
 #include "cpu.h"
 #include "memory.h"
 #include "ppu.h"
 
 
-#define MEM_PTR(b, a) Mem_PtrTable[((b) << 3) | ((a) >> 13)]
-
-#define MPTR_SLOW		(1 << 28)
-#define MPTR_SPECIAL	(1 << 29)
-#define MPTR_READONLY	(1 << 30)
-#define MPTR_SRAM		(1 << 31)
 
 u32 ROM_BaseOffset DTCM_BSS;
 u32 ROM_HeaderOffset;
@@ -42,15 +34,11 @@ u32 ROM_DataCacheBank DTCM_DATA = 0x100;
 u8 ROM_DataCache[0x10000];*/
 u8* ROM_Bank0;
 u8* ROM_Bank0End;
-u8* ROM_Cache[3 + ROMCACHE_SIZE] DTCM_BSS;
+/*u8* ROM_Cache[3 + ROMCACHE_SIZE] DTCM_BSS;
 int ROM_CacheBank[3 + ROMCACHE_SIZE] DTCM_BSS;
 u8 ROM_CacheIndex DTCM_BSS;
 int ROM_CacheInited = 0;
-u8 ROM_CacheMap[256];
-
-u8 ROM_CacheMisses[0x200];
-
-u32 ROM_FileOffset;
+u8 ROM_CacheMap[256];*/
 
 u8 ROM_Region;
 
@@ -102,44 +90,6 @@ u16 Mem_DivA = 0;
 u16 Mem_DivRes = 0;
 
 
-void ROM_ApplySpeedHacks(int banknum, u8* bank)
-{
-	int i;
-	int bsize = Mem_HiROM ? 0x10000 : 0x8000;
-
-	for (i = 2; i < bsize;)
-	{
-		//if (bank[i] == 0xA5 && bank[i+2] == 0xF0 && bank[i+3] == 0xFC)
-		if (bank[i] == 0xA5 && (bank[i+2] & 0x1F) == 0x10 && bank[i+3] == 0xFC)
-		{
-			u8 branchtype = bank[i+2];
-			bank[i+2] = 0x42;
-			bank[i+3] = (bank[i+3] & 0x0F) | (branchtype & 0xF0);
-			
-			iprintf("Speed hack installed @ %02X:%04X\n", banknum, (Mem_HiROM?0:0x8000)+i);
-			
-			i += 4;
-		}
-		else if (bank[i] == 0xAD && (bank[i+3] & 0x1F) == 0x10 && bank[i+4] == 0xFB)
-		{
-			u16 addr = bank[i+1] | (bank[i+2] << 8);
-			
-			if ((addr & 0xFFF0) != 0x2140)
-			{
-				u8 branchtype = bank[i+3];
-				bank[i+3] = 0x42;
-				bank[i+4] = (bank[i+4] & 0x0F) | (branchtype & 0xF0);
-				
-				iprintf("Speed hack installed @ %02X:%04X\n", banknum, (Mem_HiROM?0:0x8000)+i);
-			}
-			
-			i += 5;
-		}
-		else
-			i++;
-	}
-}
-
 
 bool ROM_CheckHeader(u32 offset)
 {
@@ -155,6 +105,7 @@ bool ROM_CheckHeader(u32 offset)
 	return (chkcomp ^ chksum) == 0xFFFF;
 }
 
+#if 0
 void ROM_DoUncacheBank(int bank)
 {
 	bank &= 0x7F;
@@ -214,9 +165,13 @@ void ROM_DoUncacheBank(int bank)
 	ROM_CacheMap[bank] = (u8)-1;
 }
 
+// type 1: PBR bank
+// type 2: DBR bank
+// type 3: cached after successive reads
 void _ROM_DoCacheBank(int bank, int type, bool force)
 {
 	u8 idx;
+	int oldbank;
 
 	bank &= 0x7F;
 	if (Mem_HiROM && bank < 0x40) bank += 0x40;
@@ -233,10 +188,37 @@ void _ROM_DoCacheBank(int bank, int type, bool force)
 	else
 		return;
 		
+	//if (bank == 0x20) iprintf("> cache bank 20: %d %02X %d\n", type, ROM_CacheBank[idx], ROM_CacheMap[bank]);
+		
 	if (ROM_CacheMap[bank] != (u8)-1) // bank already cached
-		return;
+	{
+		// if we're caching the bank as types 1 or 2 and it's already
+		// cached as type 3, it must be remapped to types 1 or 2
+		// to avoid ending up with PBR or DBR pointing to an uncached bank
+		if (type < 3 && ROM_CacheMap[bank] == (ROMCACHE_SIZE+2))
+		{
+			/*oldbank = ROM_CacheBank[idx];
+			if (oldbank != -1 && oldbank != bank)
+			{
+				if (ROM_CacheMap[oldbank] == idx)
+					ROM_DoUncacheBank(oldbank);
+			}
+			
+			ROM_CacheMap[bank] = idx;
+			
+			u8* temp = ROM_Cache[idx];
+			ROM_Cache[idx] = ROM_Cache[ROMCACHE_SIZE+2];
+			ROM_Cache[ROMCACHE_SIZE+2] = temp;*/
+			ROM_DoUncacheBank(bank);
+		}
+		else
+			return;
+	}
+	
+	//if (bank == 0x20) iprintf("cache bank 20: %d %02X %d\n", type, ROM_CacheBank[idx], ROM_CacheMap[bank]);
+	//if (ROM_CacheBank[idx] == 0x20) iprintf("uncache bank 20: %d %02X %d %d\n", type, bank, ROM_CacheMap[bank], ROM_CacheMap[ROM_CacheBank[idx]]);
 
-	int oldbank = ROM_CacheBank[idx];
+	oldbank = ROM_CacheBank[idx];
 	if (oldbank == bank)
 		return;
 		
@@ -324,6 +306,14 @@ void ROM_DoCacheBank(int bank, int type)
 	asm("stmdb sp!, {r12}");
 	_ROM_DoCacheBank(bank, type, false);
 	asm("ldmia sp!, {r12}");
+}
+#endif
+
+
+void reportBRK(u32 pc)
+{
+	iprintf("BRK @ %02X:%04X | %08X\n", pc>>16, pc&0xFFFF, MEM_PTR(pc>>16, pc&0xFFFF));
+	for(;;);
 }
 
 
@@ -414,7 +404,7 @@ void Mem_Reset()
 	//fseek(ROM_File, ROM_BaseOffset, SEEK_SET);
 	//fread(ROM_Bank0, 0x8000, 1, ROM_File);
 	
-	if (!ROM_CacheInited)
+	/*if (!ROM_CacheInited)
 	{
 		for (i = 0; i < 32 + 3; i++)
 			ROM_Cache[i] = 0;
@@ -427,10 +417,7 @@ void Mem_Reset()
 
 	for (i = 0; i < 32 + 3; i++)
 		ROM_CacheBank[i] = -1;
-	ROM_CacheIndex = 0;
-	
-	for (i = 0; i < 0x200; i++)
-		ROM_CacheMisses[i] = 0;
+	ROM_CacheIndex = 0;*/
 
 	if (Mem_SRAM) free(Mem_SRAM);
 	Mem_SRAM = malloc(Mem_SRAMMask + 1);
@@ -503,19 +490,19 @@ void Mem_Reset()
 				MEM_PTR(0x7E + b, a) = MEM_PTR(0xFE + b, a) = MPTR_SLOW | (u32)&Mem_SysRAM[(b << 16) + a];
 	}
 	
-	for (i = 0; i < 32; i++)
+	/*for (i = 0; i < 32; i++)
 	{
 		u32 fofs = Mem_HiROM ? (i << 16) : (i << 15);
 		if (fofs >= ROM_FileSize - ROM_BaseOffset)
 			break;
 		
 		_ROM_DoCacheBank(i, 0, true);
-	}
+	}*/
 	
-	ROM_Bank0 = ROM_Cache[0];
-	ROM_Bank0End = Mem_HiROM ? (ROM_Bank0 + 0x10000) : (ROM_Bank0 + 0x8000);
+	//ROM_Bank0 = ROM_Cache[0];
+	//ROM_Bank0End = Mem_HiROM ? (ROM_Bank0 + 0x10000) : (ROM_Bank0 + 0x8000);
 	
-	ROM_FileOffset = -1;
+	ROM_SetupCache();
 	
 	iprintf("sysram = %08X\n", &Mem_SysRAM[0]);
 	
@@ -554,94 +541,6 @@ void Mem_SaveSRAM()
 		fclose(Mem_SRAMFile);
 		Mem_SRAMFile = NULL;
 	}
-}
-
-
-u32 ROM_ReadBuffer;
-
-void ROM_CacheMiss(u32 addr)
-{
-	u32 bank = addr >> (Mem_HiROM ? 16 : 15);
-	
-	ROM_CacheMisses[bank]++;
-	if (ROM_CacheMisses[bank] > 4)
-	{
-		ROM_CacheMisses[bank] = 0;
-		_ROM_DoCacheBank(Mem_HiROM ? (bank-0x40) : bank, 3, false);
-	}
-}
-
-// (slow) uncached ROM read
-ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
-{
-	asm("stmdb sp!, {r1-r3, r12}");
-
-	if (fileaddr < ROM_FileSize)
-	{
-		if (fileaddr != ROM_FileOffset)
-		{
-			ROM_FileOffset = fileaddr;
-			fseek(ROM_File, fileaddr, SEEK_SET);
-		}
-		
-		fread(&ROM_ReadBuffer, 1, 1, ROM_File);
-		ROM_FileOffset++;
-	}
-	else
-		ROM_ReadBuffer = 0;
-	
-	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
-
-	asm("ldmia sp!, {r1-r3, r12}");
-	return ROM_ReadBuffer & 0xFF;
-}
-
-ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
-{
-	asm("stmdb sp!, {r1-r3, r12}");
-
-	if (fileaddr < ROM_FileSize)
-	{
-		if (fileaddr != ROM_FileOffset)
-		{
-			ROM_FileOffset = fileaddr;
-			fseek(ROM_File, fileaddr, SEEK_SET);
-		}
-		
-		fread(&ROM_ReadBuffer, 2, 1, ROM_File);
-		ROM_FileOffset += 2;
-	}
-	else
-		ROM_ReadBuffer = 0;
-	
-	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
-	
-	asm("ldmia sp!, {r1-r3, r12}");
-	return ROM_ReadBuffer & 0xFFFF;
-}
-
-ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
-{
-	asm("stmdb sp!, {r1-r3, r12}");
-
-	if (fileaddr < ROM_FileSize)
-	{
-		if (fileaddr != ROM_FileOffset)
-		{
-			ROM_FileOffset = fileaddr;
-			fseek(ROM_File, fileaddr, SEEK_SET);
-		}
-		
-		fread(&ROM_ReadBuffer, 3, 1, ROM_File);
-		ROM_FileOffset += 3;
-	}
-	else
-		ROM_ReadBuffer = 0;
-		
-	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
-
-	asm("ldmia sp!, {r1-r3, r12}");
-	return ROM_ReadBuffer & 0x00FFFFFF;
 }
 
 

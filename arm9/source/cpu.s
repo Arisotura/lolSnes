@@ -346,13 +346,13 @@ CPU_Regs:
 
 .macro UpdatePBCache
 	ands r0, snesPBR, #0xFF
-	movne r1, #1
+	movne r1, #0x81
 	blne ROM_DoCacheBank
 .endm
 
 .macro UpdateDBCache
 	ands r0, snesDBR, #0xFF
-	movne r1, #2
+	movne r1, #0x80
 	blne ROM_DoCacheBank
 .endm
 
@@ -1623,6 +1623,9 @@ OP_m1_BIT_DPIndX:
 @ --- BRK ---------------------------------------------------------------------
 
 OP_e0_BRK:
+	mov r0, snesPC, lsr #0x10
+	orr r0, r0, snesPBR, lsl #0x10
+	bl reportBRK
 	SkipSignatureByte
 	and r0, snesPBR, #0xFF
 	StackWrite8

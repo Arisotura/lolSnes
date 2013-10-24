@@ -1623,9 +1623,6 @@ OP_m1_BIT_DPIndX:
 @ --- BRK ---------------------------------------------------------------------
 
 OP_e0_BRK:
-	mov r0, snesPC, lsr #0x10
-	orr r0, r0, snesPBR, lsl #0x10
-	bl reportBRK
 	SkipSignatureByte
 	and r0, snesPBR, #0xFF
 	StackWrite8
@@ -1633,6 +1630,11 @@ OP_e0_BRK:
 	StackWrite16
 	and r0, snesP, #0xFF
 	StackWrite8
+	
+	mov r0, snesPC, lsr #0x10
+	orr r0, r0, snesPBR, lsl #0x10
+	bl reportBRK
+	
 	bic snesP, snesP, #flagD
 	orr snesP, snesP, #flagI
 	bic snesPBR, snesPBR, #0xFF

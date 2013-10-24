@@ -23,27 +23,15 @@
 #include "ppu.h"
 
 
-
 u32 ROM_BaseOffset DTCM_BSS;
 u32 ROM_HeaderOffset;
 FILE* ROM_File DTCM_DATA = NULL;
 u32 ROM_FileSize DTCM_BSS;
-/*u32 ROM_CodeCacheBank DTCM_DATA = 0x100;
-u8 ROM_CodeCache[0x10000];
-u32 ROM_DataCacheBank DTCM_DATA = 0x100;
-u8 ROM_DataCache[0x10000];*/
+
 u8* ROM_Bank0;
 u8* ROM_Bank0End;
-/*u8* ROM_Cache[3 + ROMCACHE_SIZE] DTCM_BSS;
-int ROM_CacheBank[3 + ROMCACHE_SIZE] DTCM_BSS;
-u8 ROM_CacheIndex DTCM_BSS;
-int ROM_CacheInited = 0;
-u8 ROM_CacheMap[256];*/
 
 u8 ROM_Region;
-
-//void (*ROM_CacheCode)(u32 bank) DTCM_BSS;
-//void (*ROM_CacheData)(u32 bank) DTCM_BSS;
 
 bool Mem_HiROM;
 u8 Mem_SysRAM[0x20000];
@@ -53,10 +41,6 @@ FILE* Mem_SRAMFile = NULL;
 
 char Mem_ROMPath[256] DTCM_BSS;
 char Mem_SRAMPath[256] DTCM_BSS;
-
-//u8 Mem_IO_21xx[0x100] DTCM_BSS;
-//u8 Mem_IO_42xx[0x20] DTCM_BSS;
-//u8 Mem_IO_43xx[0x80] DTCM_BSS;
 
 // addressing: BBBBBBBB:AAAaaaaa:aaaaaaaa
 // bit0-27: argument
@@ -89,6 +73,8 @@ u16 Mem_MulRes = 0;
 u16 Mem_DivA = 0;
 u16 Mem_DivRes = 0;
 
+bool Mem_FastROM = false;
+
 
 
 bool ROM_CheckHeader(u32 offset)
@@ -104,210 +90,6 @@ bool ROM_CheckHeader(u32 offset)
 	
 	return (chkcomp ^ chksum) == 0xFFFF;
 }
-
-#if 0
-void ROM_DoUncacheBank(int bank)
-{
-	bank &= 0x7F;
-	if (Mem_HiROM && bank < 0x40) bank += 0x40;
-	
-	if (Mem_HiROM)
-	{
-		u32 b = (bank - 0x40) << 16;
-		
-		if (bank < 0x7E)
-		{
-			MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
-			MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x2000);
-			MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x4000);
-			MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x6000);
-			MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x8000);
-			MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xA000);
-			MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xC000);
-			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xE000);
-		}
-		else
-		{
-			MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
-			MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x2000);
-			MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x4000);
-			MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x6000);
-			MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x8000);
-			MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xA000);
-			MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xC000);
-			MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xE000);
-		}
-		
-		MEM_PTR(bank - 0x40, 0x8000) = MEM_PTR(0x40 + bank, 0x8000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x8000);
-		MEM_PTR(bank - 0x40, 0xA000) = MEM_PTR(0x40 + bank, 0xA000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xA000);
-		MEM_PTR(bank - 0x40, 0xC000) = MEM_PTR(0x40 + bank, 0xC000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xC000);
-		MEM_PTR(bank - 0x40, 0xE000) = MEM_PTR(0x40 + bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0xE000);
-	}
-	else
-	{
-		if (bank < 0x7E)
-		{
-			if (bank >= 0x40 && bank < 0x70)
-			{
-				MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
-				MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
-				MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x4000);
-				MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
-			}
-
-			MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
-			MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
-			MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x4000);
-			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
-		}
-	}
-	
-	ROM_CacheMap[bank] = (u8)-1;
-}
-
-// type 1: PBR bank
-// type 2: DBR bank
-// type 3: cached after successive reads
-void _ROM_DoCacheBank(int bank, int type, bool force)
-{
-	u8 idx;
-	int oldbank;
-
-	bank &= 0x7F;
-	if (Mem_HiROM && bank < 0x40) bank += 0x40;
-	
-	if (bank >= (Mem_HiROM ? 0x60 : 0x20))
-	{
-		if (type == 1) idx = ROMCACHE_SIZE;
-		else if (type == 2) idx = ROMCACHE_SIZE + 1;
-		else if (type == 3) idx = ROMCACHE_SIZE + 2;
-		else return;
-	}
-	else if (force)
-		idx = Mem_HiROM ? (bank - 0x40) : bank;
-	else
-		return;
-		
-	//if (bank == 0x20) iprintf("> cache bank 20: %d %02X %d\n", type, ROM_CacheBank[idx], ROM_CacheMap[bank]);
-		
-	if (ROM_CacheMap[bank] != (u8)-1) // bank already cached
-	{
-		// if we're caching the bank as types 1 or 2 and it's already
-		// cached as type 3, it must be remapped to types 1 or 2
-		// to avoid ending up with PBR or DBR pointing to an uncached bank
-		if (type < 3 && ROM_CacheMap[bank] == (ROMCACHE_SIZE+2))
-		{
-			/*oldbank = ROM_CacheBank[idx];
-			if (oldbank != -1 && oldbank != bank)
-			{
-				if (ROM_CacheMap[oldbank] == idx)
-					ROM_DoUncacheBank(oldbank);
-			}
-			
-			ROM_CacheMap[bank] = idx;
-			
-			u8* temp = ROM_Cache[idx];
-			ROM_Cache[idx] = ROM_Cache[ROMCACHE_SIZE+2];
-			ROM_Cache[ROMCACHE_SIZE+2] = temp;*/
-			ROM_DoUncacheBank(bank);
-		}
-		else
-			return;
-	}
-	
-	//if (bank == 0x20) iprintf("cache bank 20: %d %02X %d\n", type, ROM_CacheBank[idx], ROM_CacheMap[bank]);
-	//if (ROM_CacheBank[idx] == 0x20) iprintf("uncache bank 20: %d %02X %d %d\n", type, bank, ROM_CacheMap[bank], ROM_CacheMap[ROM_CacheBank[idx]]);
-
-	oldbank = ROM_CacheBank[idx];
-	if (oldbank == bank)
-		return;
-		
-	if (oldbank != -1)
-	{
-		if (ROM_CacheMap[oldbank] == idx)
-			ROM_DoUncacheBank(oldbank);
-	}
-
-	ROM_CacheBank[idx] = bank;
-	if (!ROM_Cache[idx])
-		ROM_Cache[idx] = malloc(Mem_HiROM ? 0x10000 : 0x8000);
-		
-	ROM_FileOffset = -1;
-
-	u8* ptr = ROM_Cache[idx];
-	u32 base = ROM_BaseOffset;
-	if (Mem_HiROM)
-	{
-		fseek(ROM_File, base + ((bank - 0x40) << 16), SEEK_SET);
-		fread(ptr, 0x10000, 1, ROM_File);
-		
-		if (bank < 0x7E)
-		{
-			MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-			MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-			MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-			MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
-			MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
-			MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
-			MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
-			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
-		}
-		else
-		{
-			MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-			MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-			MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-			MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
-			MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
-			MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
-			MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
-			MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
-		}
-		
-		MEM_PTR(bank - 0x40, 0x8000) = MEM_PTR(0x40 + bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
-		MEM_PTR(bank - 0x40, 0xA000) = MEM_PTR(0x40 + bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
-		MEM_PTR(bank - 0x40, 0xC000) = MEM_PTR(0x40 + bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
-		MEM_PTR(bank - 0x40, 0xE000) = MEM_PTR(0x40 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
-	}
-	else
-	{
-		if (bank < 0x7E)
-		{
-			fseek(ROM_File, base + (bank << 15), SEEK_SET);
-			fread(ptr, 0x8000, 1, ROM_File);
-
-			if (bank >= 0x40 && bank < 0x70)
-			{
-				MEM_PTR(bank, 0x0000) = MEM_PTR(0x80 + bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-				MEM_PTR(bank, 0x2000) = MEM_PTR(0x80 + bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-				MEM_PTR(bank, 0x4000) = MEM_PTR(0x80 + bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-				MEM_PTR(bank, 0x6000) = MEM_PTR(0x80 + bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
-			}
-
-			MEM_PTR(bank, 0x8000) = MEM_PTR(0x80 + bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-			MEM_PTR(bank, 0xA000) = MEM_PTR(0x80 + bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-			MEM_PTR(bank, 0xC000) = MEM_PTR(0x80 + bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-			MEM_PTR(bank, 0xE000) = MEM_PTR(0x80 + bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
-		}
-	}
-	
-	ROM_CacheMap[bank] = idx;
-	
-	ROM_ApplySpeedHacks(bank, ptr);
-
-	//idx++;
-	//idx &= 7;
-	//if (idx >= ROMCACHE_SIZE) idx = 0;
-	//ROM_CacheIndex = idx;
-}
-
-void ROM_DoCacheBank(int bank, int type)
-{
-	asm("stmdb sp!, {r12}");
-	_ROM_DoCacheBank(bank, type, false);
-	asm("ldmia sp!, {r12}");
-}
-#endif
 
 
 void reportBRK(u32 pc)
@@ -400,24 +182,8 @@ void Mem_Reset()
 
 	for (i = 0; i < (128 * 1024); i += 4)
 		*(u32*)&Mem_SysRAM[i] = 0x55555555; // idk about this
-
-	//fseek(ROM_File, ROM_BaseOffset, SEEK_SET);
-	//fread(ROM_Bank0, 0x8000, 1, ROM_File);
-	
-	/*if (!ROM_CacheInited)
-	{
-		for (i = 0; i < 32 + 3; i++)
-			ROM_Cache[i] = 0;
-			
-		for (i = 0; i < 256; i++)
-			ROM_CacheMap[i] = (u8)-1;
 		
-		ROM_CacheInited = 0;
-	}
-
-	for (i = 0; i < 32 + 3; i++)
-		ROM_CacheBank[i] = -1;
-	ROM_CacheIndex = 0;*/
+	Mem_FastROM = false;
 
 	if (Mem_SRAM) free(Mem_SRAM);
 	Mem_SRAM = malloc(Mem_SRAMMask + 1);
@@ -449,9 +215,6 @@ void Mem_Reset()
 		else
 			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | MPTR_SPECIAL;
 	}
-
-	//for (a = 0; a < 0x8000; a += 0x2000)
-	//	MEM_PTR(0, 0x8000 + a) = MEM_PTR(0x80, 0x8000 + a) = MPTR_SLOW | MPTR_READONLY | (u32)&ROM_Bank0[a];
 
 	for (b = 1; b < 0x40; b++)
 	{
@@ -489,18 +252,6 @@ void Mem_Reset()
 			for (a = 0; a < 0x10000; a += 0x2000)
 				MEM_PTR(0x7E + b, a) = MEM_PTR(0xFE + b, a) = MPTR_SLOW | (u32)&Mem_SysRAM[(b << 16) + a];
 	}
-	
-	/*for (i = 0; i < 32; i++)
-	{
-		u32 fofs = Mem_HiROM ? (i << 16) : (i << 15);
-		if (fofs >= ROM_FileSize - ROM_BaseOffset)
-			break;
-		
-		_ROM_DoCacheBank(i, 0, true);
-	}*/
-	
-	//ROM_Bank0 = ROM_Cache[0];
-	//ROM_Bank0End = Mem_HiROM ? (ROM_Bank0 + 0x10000) : (ROM_Bank0 + 0x8000);
 	
 	ROM_SetupCache();
 	
@@ -681,10 +432,14 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			
 		case 0x02:
 			Mem_MulA = val;
+			//if (val) iprintf("4202 = %02X | %02X @ %06X\n", val, Mem_SysRAM[0x7A5], *(vu32*)0x040000EC);
 			break;
 		case 0x03:
 			Mem_MulRes = (u16)Mem_MulA * (u16)val;
 			Mem_DivRes = (u16)val;
+			//if (val == 5) Mem_MulRes = 0x50; // makes Super Metroid work
+			//if (Mem_MulRes)
+			//	iprintf("mul. %d x %d = %d (%04X) %02X %08X\n", Mem_MulA, val, Mem_MulRes, Mem_MulRes, Mem_SysRAM[0x7A5], *(vu32*)0x040000EC);
 			break;
 			
 		case 0x04:
@@ -720,6 +475,17 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			break;
 		case 0x0C:
 			//iprintf("HDMA enable: %02X\n", val);
+			break;
+			
+		case 0x0D:
+			{
+				bool fast = (val & 0x01);
+				if (fast ^ Mem_FastROM)
+				{
+					Mem_FastROM = fast;
+					ROM_SpeedChanged();
+				}
+			}
 			break;
 	}
 	

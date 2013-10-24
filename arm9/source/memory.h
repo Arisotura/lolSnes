@@ -55,6 +55,7 @@ extern u8* ROM_Bank0End;
 extern u8 ROM_Region;
 
 extern bool Mem_HiROM;
+extern bool Mem_FastROM;
 extern u32* Mem_PtrTable;
 
 extern u8 Mem_SysRAM[0x20000];
@@ -63,6 +64,7 @@ extern u16 Mem_VMatch;
 
 
 void ROM_DoCacheBank(u32 bank, u32 type);
+void ROM_SpeedChanged();
 
 bool Mem_LoadROM(char* path);
 void Mem_Reset();

@@ -441,6 +441,13 @@ void PPU_HandleModeChange(u32 val)
 	}*/
 }
 
+void PPU_SetEnabledBGs(u32 val)
+{
+	*(u32*)0x04000000 &= 0xFFFFE0FF;
+	if (PPU_Mode == 7) *(u32*)0x04000000 |= ((val & 0x01) ? 0x400:0) | ((val & 0x10) ? 0x1000:0);
+	else *(u32*)0x04000000 |= (val << 8);
+}
+
 void PPU_SetM7A(u32 val)
 {
 	PPU_M7A = val;
@@ -1506,16 +1513,12 @@ void PPU_Write8(u32 addr, u8 val)
 		
 		case 0x2C:
 			PPU_BGMain = val & 0x1F;
-			*(u32*)0x04000000 &= 0xFFFFE0FF;
-			if (PPU_Mode == 7) *(u32*)0x04000000 |= (((PPU_BGMain | PPU_BGSub) & 0x3) << 10);
-			else *(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
+			PPU_ScheduleLineChange(PPU_SetEnabledBGs, PPU_BGMain | PPU_BGSub);
 			break;
 		case 0x2D:
 			// TODO subscreen handling for funky hires modes
 			PPU_BGSub = val & 0x1F;
-			*(u32*)0x04000000 &= 0xFFFFE0FF;
-			if (PPU_Mode == 7) *(u32*)0x04000000 |= (((PPU_BGMain | PPU_BGSub) & 0x3) << 10);
-			else *(u32*)0x04000000 |= ((PPU_BGMain | PPU_BGSub) << 8);
+			PPU_ScheduleLineChange(PPU_SetEnabledBGs, PPU_BGMain | PPU_BGSub);
 			break;
 			
 		case 0x32:

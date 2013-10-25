@@ -107,44 +107,47 @@ void ROM_MapBankToRAM(u32 bank, u8* ptr)
 		fseek(ROM_File, base + ((bank - 0x40) << 16), SEEK_SET);
 		fread(ptr, 0x10000, 1, ROM_File);
 		
-		if (bank < 0x7E)
+		for (; bank < 0x80; bank += ROM_NumBanks)
 		{
-			MEM_PTR(bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-			MEM_PTR(bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-			MEM_PTR(bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-			MEM_PTR(bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
-			MEM_PTR(bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
-			MEM_PTR(bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
-			MEM_PTR(bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
-			MEM_PTR(bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
+			if (bank < 0x7E)
+			{
+				MEM_PTR(bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
+				MEM_PTR(bank, 0x2000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
+				MEM_PTR(bank, 0x4000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
+				MEM_PTR(bank, 0x6000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
+				MEM_PTR(bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
+				MEM_PTR(bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
+				MEM_PTR(bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
+				MEM_PTR(bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
+			}
+			
+			MEM_PTR(0x80 + bank, 0x0000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x0000];
+			MEM_PTR(0x80 + bank, 0x2000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x2000];
+			MEM_PTR(0x80 + bank, 0x4000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x4000];
+			MEM_PTR(0x80 + bank, 0x6000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x6000];
+			MEM_PTR(0x80 + bank, 0x8000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x8000];
+			MEM_PTR(0x80 + bank, 0xA000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xA000];
+			MEM_PTR(0x80 + bank, 0xC000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xC000];
+			MEM_PTR(0x80 + bank, 0xE000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xE000];
+			
+			MEM_PTR(bank - 0x40, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
+			MEM_PTR(bank - 0x40, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
+			MEM_PTR(bank - 0x40, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
+			MEM_PTR(bank - 0x40, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
+			
+			MEM_PTR(0x40 + bank, 0x8000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x8000];
+			MEM_PTR(0x40 + bank, 0xA000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xA000];
+			MEM_PTR(0x40 + bank, 0xC000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xC000];
+			MEM_PTR(0x40 + bank, 0xE000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xE000];
 		}
-		
-		MEM_PTR(0x80 + bank, 0x0000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x0000];
-		MEM_PTR(0x80 + bank, 0x2000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x2000];
-		MEM_PTR(0x80 + bank, 0x4000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x4000];
-		MEM_PTR(0x80 + bank, 0x6000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x6000];
-		MEM_PTR(0x80 + bank, 0x8000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x8000];
-		MEM_PTR(0x80 + bank, 0xA000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xA000];
-		MEM_PTR(0x80 + bank, 0xC000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xC000];
-		MEM_PTR(0x80 + bank, 0xE000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xE000];
-		
-		MEM_PTR(bank - 0x40, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x8000];
-		MEM_PTR(bank - 0x40, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xA000];
-		MEM_PTR(bank - 0x40, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xC000];
-		MEM_PTR(bank - 0x40, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0xE000];
-		
-		MEM_PTR(0x40 + bank, 0x8000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x8000];
-		MEM_PTR(0x40 + bank, 0xA000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xA000];
-		MEM_PTR(0x40 + bank, 0xC000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xC000];
-		MEM_PTR(0x40 + bank, 0xE000) = hi_slow | MPTR_READONLY | (u32)&ptr[0xE000];
 	}
 	else
 	{
-		if (bank < 0x7E)
-		{
-			fseek(ROM_File, base + (bank << 15), SEEK_SET);
-			fread(ptr, 0x8000, 1, ROM_File);
+		fseek(ROM_File, base + (bank << 15), SEEK_SET);
+		fread(ptr, 0x8000, 1, ROM_File);
 
+		for (; bank < 0x80; bank += ROM_NumBanks)
+		{
 			if (bank >= 0x40 && bank < 0x70)
 			{
 				MEM_PTR(bank, 0x0000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
@@ -157,11 +160,14 @@ void ROM_MapBankToRAM(u32 bank, u8* ptr)
 				MEM_PTR(0x80 + bank, 0x4000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x4000];
 				MEM_PTR(0x80 + bank, 0x6000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x6000];
 			}
-
-			MEM_PTR(bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
-			MEM_PTR(bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
-			MEM_PTR(bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
-			MEM_PTR(bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
+			
+			if (bank < 0x7E)
+			{
+				MEM_PTR(bank, 0x8000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x0000];
+				MEM_PTR(bank, 0xA000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x2000];
+				MEM_PTR(bank, 0xC000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x4000];
+				MEM_PTR(bank, 0xE000) = MPTR_SLOW | MPTR_READONLY | (u32)&ptr[0x6000];
+			}
 			
 			MEM_PTR(0x80 + bank, 0x8000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x0000];
 			MEM_PTR(0x80 + bank, 0xA000) = hi_slow | MPTR_READONLY | (u32)&ptr[0x2000];
@@ -181,10 +187,10 @@ void ROM_MapBankToFile(u32 bank)
 	
 	if (Mem_HiROM)
 	{
+		u32 b = (bank - 0x40) << 16;
+		
 		for (; bank < 0x80; bank += ROM_NumBanks)
 		{
-			u32 b = (bank - 0x40) << 16;
-			
 			if (bank < 0x7E)
 			{
 				MEM_PTR(bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
@@ -219,33 +225,35 @@ void ROM_MapBankToFile(u32 bank)
 	}
 	else
 	{
+		u32 b = bank << 15;
+		
 		for (; bank < 0x80; bank += ROM_NumBanks)
 		{
+			if (bank >= 0x40 && bank < 0x70)
+			{
+				MEM_PTR(bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
+				MEM_PTR(bank, 0x2000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x2000);
+				MEM_PTR(bank, 0x4000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x4000);
+				MEM_PTR(bank, 0x6000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x6000);
+				
+				MEM_PTR(0x80 + bank, 0x0000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
+				MEM_PTR(0x80 + bank, 0x2000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x2000);
+				MEM_PTR(0x80 + bank, 0x4000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x4000);
+				MEM_PTR(0x80 + bank, 0x6000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x6000);
+			}
+
 			if (bank < 0x7E)
 			{
-				if (bank >= 0x40 && bank < 0x70)
-				{
-					MEM_PTR(bank, 0x0000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
-					MEM_PTR(bank, 0x2000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
-					MEM_PTR(bank, 0x4000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x4000);
-					MEM_PTR(bank, 0x6000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
-					
-					MEM_PTR(0x80 + bank, 0x0000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
-					MEM_PTR(0x80 + bank, 0x2000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
-					MEM_PTR(0x80 + bank, 0x4000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x4000);
-					MEM_PTR(0x80 + bank, 0x6000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
-				}
-
-				MEM_PTR(bank, 0x8000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
-				MEM_PTR(bank, 0xA000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
-				MEM_PTR(bank, 0xC000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x4000);
-				MEM_PTR(bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
-				
-				MEM_PTR(0x80 + bank, 0x8000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x0000);
-				MEM_PTR(0x80 + bank, 0xA000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x2000);
-				MEM_PTR(0x80 + bank, 0xC000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x4000);
-				MEM_PTR(0x80 + bank, 0xE000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + (bank << 15) + 0x6000);
+				MEM_PTR(bank, 0x8000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
+				MEM_PTR(bank, 0xA000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x2000);
+				MEM_PTR(bank, 0xC000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x4000);
+				MEM_PTR(bank, 0xE000) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x6000);
 			}
+			
+			MEM_PTR(0x80 + bank, 0x8000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x0000);
+			MEM_PTR(0x80 + bank, 0xA000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x2000);
+			MEM_PTR(0x80 + bank, 0xC000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x4000);
+			MEM_PTR(0x80 + bank, 0xE000) = hi_slow | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + b + 0x6000);
 		}
 	}
 }

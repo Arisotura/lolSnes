@@ -54,128 +54,134 @@ CPU_Regs:
 @ --- General purpose read/write ----------------------------------------------
 @ may be slow as they handle any possible case
 
-.macro MemRead8
+.section    .itcm, "awx", %progbits
+
+_MemRead8:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0x60000
 	subne snesCycles, snesCycles, #0x80000
 	tst r3, #0x20000000
-	bne 1f
-		bic r3, r3, #0xF0000000
-		mov r0, r0, lsl #0x13
-		ldrb r0, [r3, r0, lsr #0x13]
-		b 3f
-1:
-		tst r3, #0x40000000
-		bne 2f
-			bl Mem_IORead8
-			b 3f
-2:
-			bic r3, r3, #0xF0000000
-			mov r0, r0, lsl #0x13
-			add r0, r3, r0, lsr #0x13
-			bl Mem_ROMRead8
-3:
+	bne mr8_1
+	
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	ldrb r0, [r3, r0, lsr #0x13]
+	bx lr
+mr8_1:
+	tst r3, #0x40000000
+	beq Mem_IORead8
+
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	add r0, r3, r0, lsr #0x13
+	b Mem_ROMRead8
+
+.macro MemRead8
+	bl _MemRead8
 .endm
 
-.macro MemRead16
+_MemRead16:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0xC0000
 	subne snesCycles, snesCycles, #0x100000
 	tst r3, #0x20000000
-	bne 1f
-		bic r3, r3, #0xF0000000
-		mov r0, r0, lsl #0x13
-		add r3, r3, r0, lsr #0x13
-		ldrb r0, [r3]				@ can't use ldrh because it doesn't support unaligned reads :/
-		ldrb r3, [r3, #0x1]
-		orr r0, r0, r3, lsl #0x8
-		b 3f
-1:
-		tst r3, #0x40000000
-		bne 2f
-			bl Mem_IORead16
-			b 3f
-2:
-			bic r3, r3, #0xF0000000
-			mov r0, r0, lsl #0x13
-			add r0, r3, r0, lsr #0x13
-			bl Mem_ROMRead16
-3:
+	bne mr16_1
+	
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	add r3, r3, r0, lsr #0x13
+	ldrb r0, [r3]				@ can't use ldrh because it doesn't support unaligned reads :/
+	ldrb r3, [r3, #0x1]
+	orr r0, r0, r3, lsl #0x8
+	bx lr
+mr16_1:
+	tst r3, #0x40000000
+	beq Mem_IORead16
+
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	add r0, r3, r0, lsr #0x13
+	b Mem_ROMRead16
+
+.macro MemRead16
+	bl _MemRead16
 .endm
 
-.macro MemRead24
+_MemRead24:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0x120000
 	subne snesCycles, snesCycles, #0x180000
 	tst r3, #0x20000000
-	bne 1f
-		bic r3, r3, #0xF0000000
-		mov r0, r0, lsl #0x13
-		add r3, r3, r0, lsr #0x13
-		ldrb r0, [r3]
-		ldrb r2, [r3, #0x1]
-		orr r0, r0, r2, lsl #0x8
-		ldrb r3, [r3, #0x2]
-		orr r0, r0, r3, lsl #0x10
-		b 2f
-1:
-		@ 24bit reads are just for reading long addresses, they should never be used for I/O
-		bic r3, r3, #0xF0000000
-		mov r0, r0, lsl #0x13
-		add r0, r3, r0, lsr #0x13
-		bl Mem_ROMRead24
-2:
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	add r3, r3, r0, lsr #0x13
+	movne r0, r3
+	bne Mem_ROMRead24
+	
+	ldrb r0, [r3]
+	ldrb r2, [r3, #0x1]
+	orr r0, r0, r2, lsl #0x8
+	ldrb r3, [r3, #0x2]
+	orr r0, r0, r3, lsl #0x10
+	bx lr
+
+.macro MemRead24
+	bl _MemRead24
 .endm
 
-.macro MemWrite8
+_MemWrite8:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0x60000
 	subne snesCycles, snesCycles, #0x80000
 	tst r3, #0x40000000
-	bne 2f
+	bxne lr
+	
 	tst r3, #0x20000000
-	beq 1f
-		bl Mem_IOWrite8
-		b 2f
-1:
-		tst r3, #0x80000000
-		strne r3, [memoryMap, #-0x4]
-		bic r3, r3, #0xF0000000
-		mov r0, r0, lsl #0x13
-		strb r1, [r3, r0, lsr #0x13]
-2:
+	bne Mem_IOWrite8
+	
+	tst r3, #0x80000000
+	strne r3, [memoryMap, #-0x4]
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	strb r1, [r3, r0, lsr #0x13]
+	bx lr
+
+.macro MemWrite8
+	bl _MemWrite8
 .endm
 
-.macro MemWrite16
+_MemWrite16:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0xC0000
 	subne snesCycles, snesCycles, #0x100000
 	tst r3, #0x40000000
-	bne 2f
+	bxne lr
+	
 	tst r3, #0x20000000
-	beq 1f
-		bl Mem_IOWrite16
-		b 2f
-1:
-		tst r3, #0x80000000
-		strne r3, [memoryMap, #-0x4]
-		bic r3, r3, #0xF0000000
-		mov r0, r0, lsl #0x13
-		add r3, r3, r0, lsr #0x13
-		strb r1, [r3]
-		mov r1, r1, lsr #0x8
-		strb r1, [r3, #0x1]
-2:
+	bne Mem_IOWrite16
+
+	tst r3, #0x80000000
+	strne r3, [memoryMap, #-0x4]
+	bic r3, r3, #0xF0000000
+	mov r0, r0, lsl #0x13
+	add r3, r3, r0, lsr #0x13
+	strb r1, [r3]
+	mov r1, r1, lsr #0x8
+	strb r1, [r3, #0x1]
+	bx lr
+
+.macro MemWrite16
+	bl _MemWrite16
 .endm
 
 @ --- Stack read/write --------------------------------------------------------
@@ -357,6 +363,8 @@ CPU_Regs:
 .endm
 
 @ --- Opcode tables -----------------------------------------------------------
+
+.section    .dtcm, "aw", %progbits
 
 OpTableStart:
 @ Native mode, 16bit accum & index (e=0, m=0, x=0)

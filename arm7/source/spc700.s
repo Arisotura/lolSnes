@@ -322,6 +322,7 @@ SPC_Run:
 frameloop:
 	ldr r12, [sp]
 	add r12, r12, #0x200
+	@add r12, r12, #0x0AA
 	str r12, [sp]
 		
 bigemuloop:

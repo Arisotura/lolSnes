@@ -264,7 +264,7 @@ void Mem_Reset()
 	IPC = memUncached(IPC);
 	iprintf("IPC struct = %08X\n", IPC);
 	fifoSendValue32(FIFO_USER_01, 3);
-	fifoSendAddress(FIFO_USER_01, IPC);
+	fifoSendAddress(FIFO_USER_01, memCached(IPC));
 	
 	Mem_HVBJOY = 0x00;
 	
@@ -414,6 +414,11 @@ u16 Mem_GIORead16(u32 addr)
 		case 0x18:
 			ret = IO_ReadKeysLow() | (IO_ReadKeysHigh() << 8);
 			break;
+			
+		default:
+			ret = Mem_GIORead8(addr);
+			ret |= (Mem_GIORead8(addr + 1) << 8);
+			break;
 	}
 	
 	asm("ldmia sp!, {r12}");
@@ -510,6 +515,16 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 			
 		case 0x09:
 			Mem_VMatch = val;
+			break;
+			
+		case 0x0B:
+			DMA_Enable(val & 0xFF);
+			// TODO HDMA
+			break;
+			
+		default:
+			Mem_GIOWrite8(addr, val & 0xFF);
+			Mem_GIOWrite8(addr + 1, val >> 8);
 			break;
 	}
 	

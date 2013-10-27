@@ -36,9 +36,27 @@
 bool running = false;
 
 
-void arm7print(u32 value32, void * userdata)
+void arm7print(u32 value32, void* userdata)
 {
 	iprintf(IPC->Dbg_String);
+}
+
+
+void sleepMode(u32 value32, void* userdata)
+{iprintf("sleep mode engaged\n");for(;;);
+	fifoSendValue32(FIFO_USER_03, 1);
+	
+	// turn shit off
+	u32 powerstate = *(vu32*)0x04000304;
+	*(vu32*)0x04000304 = (powerstate & 0x8001);
+	
+	swiIntrWait(1, IRQ_FIFO_NOT_EMPTY);
+	iprintf("done sleeping\n");
+	// turn shit back on
+	*(vu32*)0x04000304 = powerstate;
+	
+	fifoSendValue32(FIFO_USER_03, 1);
+	while (!fifoCheckValue32(FIFO_USER_03));
 }
 
 
@@ -201,6 +219,7 @@ int main(void)
 	irqSet(IRQ_VBLANK, vblank_idle);
 	
 	fifoSetValue32Handler(FIFO_USER_02, arm7print, NULL);
+	fifoSetValue32Handler(FIFO_USER_03, sleepMode, NULL);
 	
 	//vramSetBankA(VRAM_A_LCD);
 	videoSetMode(MODE_0_2D);

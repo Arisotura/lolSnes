@@ -30,7 +30,34 @@ void vblank()
 {
 	if (!IPC) return;
 	
-	IPC->Input_XY = *(vu8*)0x04000136;
+	u8 extkeyin = *(vu8*)0x04000136;
+	IPC->Input_XY = extkeyin;
+	
+	if (extkeyin & 0x80)
+	{
+		// tell the ARM9 we're going to sleep, wait till it's ready
+		fifoSendValue32(FIFO_USER_03, 1);for(;;);
+		while (!fifoCheckValue32(FIFO_USER_03));
+		
+		// turn shit off
+		u32 powerstate = readPowerManagement(PM_CONTROL_REG);
+		writePowerManagement(PM_CONTROL_REG, 0x12);
+		
+		u32 powerstate2 = *(vu32*)0x04000304;
+		*(vu32*)0x04000304 = 0;
+		
+		swiSleep();
+		
+		// turn shit back on
+		writePowerManagement(PM_CONTROL_REG, powerstate);
+		
+		*(vu32*)0x04000304 = powerstate2;
+		swiDelay(125678);
+		
+		// wait for the ARM9
+		while (!fifoCheckValue32(FIFO_USER_03));
+		fifoSendValue32(FIFO_USER_03, 1);
+	}
 }
 
 u32 cursample = 0;
@@ -52,6 +79,8 @@ int main()
 
 	installSystemFIFO();
 	
+	irqEnable(IRQ_LID);
+	
 	irqEnable(IRQ_VBLANK);
 	irqSet(IRQ_VBLANK, vblank);
 	
@@ -69,8 +98,6 @@ int main()
 	for (i = 0; i < 64; i += 4)
 		*dst++ = *src++;
 	
-	// set timer 0 to run at ~2000Hz
-	// (16 samples are mixed each time)
 	irqEnable(IRQ_TIMER0);
 	*(vu16*)0x04000100 = 0xBEA0;
 	//*(vu16*)0x04000100 = 0xA8C0;

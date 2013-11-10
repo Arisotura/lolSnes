@@ -226,7 +226,7 @@ OpTableStart:
 	.long OP_SETP, OP_UNK, OP_SET2, OP_BBS_2, OP_EOR_A_DP, OP_EOR_A_lm, OP_EOR_A_mX, OP_EOR_A_m_X	@4
 	.long OP_EOR_A_Imm, OP_EOR_DP_DP, OP_UNK, OP_LSR_DP, OP_LSR_lm, OP_PUSH_X, OP_TCLR, OP_UNK
 	.long OP_BVC, OP_UNK, OP_CLR2, OP_BBC_2, OP_EOR_A_DP_X, OP_EOR_A_lm_X, OP_EOR_A_lm_Y, OP_EOR_A_m_Y	@5
-	.long OP_EOR_DP_Imm, OP_EOR_mX_mY, OP_UNK, OP_LSR_DP_X, OP_LSR_A, OP_MOV_X_A, OP_CMP_Y_mImm, OP_JMP_a
+	.long OP_EOR_DP_Imm, OP_EOR_mX_mY, OP_CMPW_YA_DP, OP_LSR_DP_X, OP_LSR_A, OP_MOV_X_A, OP_CMP_Y_mImm, OP_JMP_a
 	.long OP_CLRC, OP_UNK, OP_SET3, OP_BBS_3, OP_CMP_A_DP, OP_CMP_A_mImm, OP_UNK, OP_CMP_A_m_X	@6
 	.long OP_CMP_A_Imm, OP_CMP_DP_DP, OP_UNK, OP_ROR_DP, OP_ROR_lm, OP_PUSH_Y, OP_DBNZ_DP, OP_RET
 	.long OP_BVS, OP_UNK, OP_CLR3, OP_BBC_3, OP_CMP_A_DP_X, OP_CMP_A_mImm_X, OP_CMP_A_mImm_Y, OP_CMP_A_m_Y	@7
@@ -1146,6 +1146,22 @@ OP_CMP_Y_mImm:
 	MemRead8
 	DO_CMP spcY, r0
 	AddCycles 4
+	b op_return
+	
+@ --- CMPW --------------------------------------------------------------------
+
+OP_CMPW_YA_DP:
+	GetAddr_DP
+	MemRead16
+	orr r2, spcA, spcY, lsl #0x8
+	subs r12, r2, r0
+	bic spcPSW, spcPSW, #flagNZC
+	orreq spcPSW, spcPSW, #flagZ
+	tst r12, #0x8000
+	orrne spcPSW, spcPSW, #flagN
+	tst r12, #0x10000
+	orreq spcPSW, spcPSW, #flagC
+	AddCycles 5
 	b op_return
 	
 @ --- DBNZ --------------------------------------------------------------------

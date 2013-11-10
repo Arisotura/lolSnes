@@ -553,7 +553,7 @@ u16 Mem_JoyRead16(u32 addr)
 	
 	u16 ret = 0;
 	
-	//iprintf("joy read16 %02X\n", addr);
+	//iprintf("joy read16 40%02X\n", addr);
 	
 	asm("ldmia sp!, {r12}");
 	return ret;

@@ -115,7 +115,6 @@ typedef struct
 	
 	int ColorDepth;
 	u16 MapPalOffset;
-	u32 TilePalOffset;
 	
 	u16 ScrollX, ScrollY;
 	
@@ -157,6 +156,7 @@ u8 PPU_BG3Prio;
 u8 PPU_BGMain, PPU_BGSub;
 u8 PPU_BGMask, PPU_BGEnable;
 u16 PPU_MainBackdrop, PPU_SubBackdrop;
+u8 PPU_ColorMath;
 
 u8 PPU_OBJSize;
 u16 PPU_OBJBase;
@@ -199,6 +199,8 @@ u8 PPU_SpriteSize[16] =
 
 u16 PPU_OBJPrio[4] DTCM_DATA;
 
+u8 PPU_BGStatusDirty DTCM_DATA = 0;
+
 
 u8 PPU_M7Old;
 
@@ -232,6 +234,7 @@ typedef struct
 } PPU_LineChange;
 PPU_LineChange PPU_LineChanges[193][MAX_LINE_CHANGES];
 u8 PPU_NumLineChanges[193] DTCM_DATA;
+u8 PPU_VBlankChangesDirty DTCM_DATA;
 
 
 
@@ -319,6 +322,7 @@ void PPU_Reset()
 		PPU_LineChanges[i][0].Action = 0;
 		PPU_NumLineChanges[i] = 0;
 	}
+	PPU_VBlankChangesDirty = 0;
 	
 	
 	PPU_MasterBright = 0;
@@ -330,6 +334,7 @@ void PPU_Reset()
 	PPU_BGSub = 0;
 	PPU_MainBackdrop = 0;
 	PPU_SubBackdrop = 0;
+	PPU_ColorMath = 0;
 	
 	
 	PPU_OBJSize = 0;
@@ -344,6 +349,8 @@ void PPU_Reset()
 	PPU_OBJPrio[1] = 2 << 10;
 	PPU_OBJPrio[2] = 1 << 10;
 	PPU_OBJPrio[3] = 0 << 10;
+	
+	PPU_BGStatusDirty = 0;
 		
 	PPU_M7Old = 0;
 	PPU_MulA = 0;
@@ -377,20 +384,113 @@ void PPU_Reset()
 }
 
 
-inline void PPU_UpdateOBJPrio()
+ITCM_CODE void PPU_UpdateOBJPrio()
 {
-	u16* oam = (u16*)0x07000002;
+	u16* oam = (u16*)0x07000000;
 	u8* priolist = &PPU_OBJPrioList[0];
+	u8* curprio = &PPU_CurPrio[12];
+	u16 semitransp = (PPU_ColorMath & 0x10) ? 0x0400 : 0;
 	u8 i;
 	
 	for (i = 0; i < PPU_NumSprites; i++)
 	{
-		u16 attr = *oam & 0xF3FF;
-		u16 prio = PPU_OBJPrio[*priolist++];
-		*oam = attr | prio;
+		u16 attr2 = oam[2] & 0xFFFFF3FF;
+		
+		if (attr2 & 0x4000) 
+		{
+			u16 attr0 = oam[0] & 0xFFFFF3FF;
+			oam[0] = attr0 | semitransp;
+		}
+		
+		u16 prio = curprio[*priolist++] << 10;
+		oam[2] = attr2 | prio;
 		
 		oam += 4;
 	}
+}
+
+void PPU_UpdateEnabledBGs()
+{
+	register u8 dirty = PPU_BGStatusDirty;
+	int i;
+	
+	PPU_BGStatusDirty = 0;
+	
+	if (dirty & 0x07)
+	{
+		u8 prionum;
+		if ((PPU_ColorMath & 0x2F) == 0x20) // case where the subscreen ends up behind the mainscreen
+			prionum = PPU_BGSub & (PPU_BGMain ^ 0x1F);
+		else
+			prionum = 0;
+			
+		u8 mode = PPU_BG3Prio ? 8 : PPU_Mode;
+		
+		if ((dirty & 0x01) || (prionum != PPU_CurPrioNum))
+		{
+			u8* newprio = &PPU_PrioTable[(mode << 9) + (prionum << 4)];
+			bool reassign = ((!(dirty & 0x01)) && (*(u32*)&newprio[0] != *(u32*)&PPU_CurPrio[0]));
+			
+			iprintf("prio: %d %02X | %02X %02X\n", mode, prionum, PPU_BGMain, PPU_BGSub);
+			iprintf(" %d %d %d %d\n", newprio[0], newprio[1], newprio[2], newprio[3]);
+			iprintf(" %d %d %d %d\n", newprio[4], newprio[5], newprio[6], newprio[7]);
+			iprintf(" %d %d %d %d\n", newprio[8], newprio[9], newprio[10], newprio[11]);
+			iprintf(" %d %d %d %d\n", newprio[12], newprio[13], newprio[14], newprio[15]);
+			
+			if (mode != 7)
+			{
+				for (i = 0; i < 4; i++)
+				{
+					PPU_Background* bg = &PPU_BG[i];
+					
+					bg->BGCnt = (bg->BGCnt & 0xFFFFFFFC) | newprio[4 + i];
+					
+					if (reassign)
+					{
+						register u8 dsbg = newprio[i];
+						bg->DSBG = dsbg;
+						bg->Mask = 1 << dsbg;
+						
+						bg->BGCNT = (u16*)(0x04000008 + (dsbg << 1));
+						bg->BGHOFS = (u16*)(0x04000010 + (dsbg << 2));
+						bg->BGVOFS = (u16*)(0x04000012 + (dsbg << 2));
+						
+						*bg->BGHOFS = bg->ScrollX;
+						*bg->BGVOFS = bg->ScrollY;
+					}
+					
+					*bg->BGCNT = bg->BGCnt;
+				}
+			}
+			
+			PPU_CurPrioNum = prionum;
+			PPU_CurPrio = newprio;
+		}
+		
+		PPU_BGEnable = PPU_BGMain | PPU_BGSub;
+		
+		u32 dispcnt = *(vu32*)0x04000000;
+		dispcnt &= 0xFFFFE0FF;
+		
+		if (mode == 7)
+		{
+			if (PPU_BGEnable & 0x01) dispcnt |= 0x0400;
+			// TODO EXTBG
+		}
+		else
+		{
+			if (PPU_BGEnable & 0x01) dispcnt |= (PPU_BG[0].Mask << 8);
+			if (PPU_BGEnable & 0x02) dispcnt |= (PPU_BG[1].Mask << 8);
+			if (PPU_BGEnable & 0x04) dispcnt |= (PPU_BG[2].Mask << 8);
+			if (PPU_BGEnable & 0x08) dispcnt |= (PPU_BG[3].Mask << 8);
+		}
+		if (PPU_BGEnable & 0x10) dispcnt |= 0x1000;
+		
+		*(vu32*)0x04000000 = dispcnt;
+	}
+	
+	if (dirty & 0x0F)
+		PPU_UpdateOBJPrio();
 }
 
 
@@ -408,7 +508,13 @@ void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 	else if (vcount < 0)
 	{
 		(*action)(data);
-		return;
+		vcount = 192;
+	}
+	
+	if (vcount == 192 && PPU_VBlankChangesDirty)
+	{
+		PPU_VBlankChangesDirty = 0;
+		PPU_NumLineChanges[192] = 0;
 	}
 	
 	// if the change occured too late, apply it now, and 
@@ -460,6 +566,8 @@ inline void PPU_DoLineChanges(u32 line)
 		(*(change->Action))(change->Data);
 		change++;
 	}
+	
+	if (line == 192) PPU_VBlankChangesDirty = 1;
 }
 
 
@@ -467,6 +575,9 @@ ITCM_CODE void PPU_WriteReg16(u32 data)
 {
 	u16 val = data & 0xFFFF;
 	u32 reg = 0x04000000 | (data >> 16);
+	
+	//if ((data >> 16) == 0x14 || (data >> 16) == 0x16)
+	//	iprintf("[%03d/%03d] BG1%cOFS = %d\n", *(vu16*)0x04000006, PPU_VCount, (data&0x20000)?'V':'H', val);
 	
 	*(vu16*)reg = val;
 	if ((reg & 0x3FC) == 0x10) PPU_M7RefDirty = 1;
@@ -477,7 +588,7 @@ ITCM_CODE void PPU_HandleModeChange(u32 val)
 	if (val & 0xF0) iprintf("!! 16x16 TILES NOT SUPPORTED\n");
 	
 	PPU_BG3Prio = ((val & 0x0F) == 0x09);
-	if (PPU_BG3Prio)
+	/*if (PPU_BG3Prio)
 	{
 		PPU_OBJPrio[0] = 3 << 10;
 		PPU_OBJPrio[1] = 3 << 10;
@@ -492,57 +603,28 @@ ITCM_CODE void PPU_HandleModeChange(u32 val)
 		PPU_OBJPrio[2] = 1 << 10;
 		PPU_OBJPrio[3] = 0 << 10;
 		PPU_UpdateOBJPrio();
-	}
-	
-	u8 mode = val & 0x0F;
-	if (mode == 9) mode = 8;
-	else mode &= 0x07;
-	PPU_CurPrio = &PPU_PrioTable[(mode << 9) + (PPU_CurPrioNum << 4)];
+	}*/
 	
 	PPU_ModeChange(val & 0x07);
-}
-
-inline void PPU_UpdateEnabledBGs()
-{
-	PPU_BGEnable = PPU_BGMain | PPU_BGSub;
-	
-	u32 dispcnt = *(vu32*)0x04000000;
-	dispcnt &= 0xFFFFE0FF;
-	
-	if (PPU_Mode == 7)
-	{
-		if (PPU_BGEnable & 0x01) dispcnt |= 0x0400;
-		// TODO EXTBG
-	}
-	else
-	{
-		if (PPU_BGEnable & 0x01) dispcnt |= (PPU_BG[0].Mask << 8);
-		if (PPU_BGEnable & 0x02) dispcnt |= (PPU_BG[1].Mask << 8);
-		if (PPU_BGEnable & 0x04) dispcnt |= (PPU_BG[2].Mask << 8);
-		if (PPU_BGEnable & 0x08) dispcnt |= (PPU_BG[3].Mask << 8);
-	}
-	if (PPU_BGEnable & 0x10) dispcnt |= 0x1000;
-	
-	*(vu32*)0x04000000 = dispcnt;
-	
-	u8 prionum = PPU_BGSub & (PPU_BGMain ^ 0x1F);
-	if (prionum != PPU_CurPrioNum)
-	{
-		PPU_CurPrioNum = prionum;
-		// do shit
-	}
+	PPU_BGStatusDirty |= 0x01;
 }
 
 ITCM_CODE void PPU_SetMainScreen(u32 val)
 {
 	PPU_BGMain = val;
-	PPU_UpdateEnabledBGs();
+	PPU_BGStatusDirty |= 0x02;
 }
 
 ITCM_CODE void PPU_SetSubScreen(u32 val)
 {
 	PPU_BGSub = val;
-	PPU_UpdateEnabledBGs();
+	PPU_BGStatusDirty |= 0x04;
+}
+
+ITCM_CODE void PPU_SetColorMath(u32 val)
+{
+	PPU_ColorMath = val;
+	PPU_BGStatusDirty |= 0x08;
 }
 
 ITCM_CODE void PPU_SetM7A(u32 val)
@@ -597,6 +679,11 @@ ITCM_CODE void PPU_SetM7ScrollY(u32 val)
 	PPU_M7RefDirty = 1;
 }
 
+ITCM_CODE void PPU_SetSubBackdrop(u32 val)
+{
+	*(u16*)0x05000000 = val ? val : PPU_MainBackdrop;
+}
+
 
 ITCM_CODE void PPU_UploadBGPal()
 {
@@ -609,40 +696,12 @@ ITCM_CODE void PPU_UploadBGPal()
 	
 	switch (PPU_LastNon7Mode)
 	{
-		case 0:  // 0-7: 4 colors
-			for (i = 0; i < 8; i++)
+		case 0:  // 4 colors, split across the 2 slots (32 palettes)
+			for (i = 0; i < 32; i++)
 			{
-				*dst++ = *dst2++ = *src++;
-				*dst++ = *dst2++ = *src++;
+				*dst++ = *src++;
+				*dst++ = *src++;
 				dst += (252 >> 1);
-				dst2 += (252 >> 1);
-			}
-			dst -= (2032 >> 1);
-			dst2 -= (2032 >> 1);
-			for (i = 0; i < 8; i++)
-			{
-				*dst++ = *dst2++ = *src++;
-				*dst++ = *dst2++ = *src++;
-				dst += (252 >> 1);
-				dst2 += (252 >> 1);
-			}
-			dst -= (2032 >> 1);
-			dst2 -= (2032 >> 1);
-			for (i = 0; i < 8; i++)
-			{
-				*dst++ = *dst2++ = *src++;
-				*dst++ = *dst2++ = *src++;
-				dst += (252 >> 1);
-				dst2 += (252 >> 1);
-			}
-			dst -= (2032 >> 1);
-			dst2 -= (2032 >> 1);
-			for (i = 0; i < 8; i++)
-			{
-				*dst++ = *dst2++ = *src++;
-				*dst++ = *dst2++ = *src++;
-				dst += (252 >> 1);
-				dst2 += (252 >> 1);
 			}
 			break;
 			
@@ -909,7 +968,7 @@ void PPU_UploadOBJChr()
 	}
 }
 
-void PPU_SetupBG(int nbg, int depth, u32 tilepaloffset, u16 mappaloffset)
+void PPU_SetupBG(int nbg, int depth, u16 mappaloffset)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
 	
@@ -949,9 +1008,7 @@ void PPU_SetupBG(int nbg, int depth, u32 tilepaloffset, u16 mappaloffset)
 				if (((bg->ChrBase >> 11) + i) < 32)
 					PPU_VRAMMap[(bg->ChrBase >> 11) + i].ChrUsage |= bmask;
 		}
-		
-		bg->TilePalOffset = tilepaloffset;
-		
+
 		if (depth != 0)
 		{
 			PPU_UploadBGChr(nbg);
@@ -970,11 +1027,6 @@ void PPU_SetupBG(int nbg, int depth, u32 tilepaloffset, u16 mappaloffset)
 		{
 			bg->MapPalOffset = mappaloffset;
 			PPU_UploadBGScr(nbg);
-		}
-		if (tilepaloffset != bg->TilePalOffset)
-		{
-			bg->TilePalOffset = tilepaloffset;
-			PPU_UploadBGChr(nbg);
 		}
 	}
 	
@@ -1017,10 +1069,12 @@ void PPU_ModeChange(u8 newmode)
 		}
 	}
 	
-	PPU_BG[0].BGCnt = (PPU_BG[0].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[0];
+	/*PPU_BG[0].BGCnt = (PPU_BG[0].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[0];
 	PPU_BG[1].BGCnt = (PPU_BG[1].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[1];
 	PPU_BG[2].BGCnt = (PPU_BG[2].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[2];
-	PPU_BG[3].BGCnt = (PPU_BG[3].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[3];
+	PPU_BG[3].BGCnt = (PPU_BG[3].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[3];*/
+	//*(vu16*)0x04000050 = 0x0164;
+	//*(vu16*)0x04000052 = 0x0808;
 	/**(u16*)0x04000008 = PPU_BG[0].BGCnt;
 	*(u16*)0x0400000A = PPU_BG[1].BGCnt;
 	*(u16*)0x0400000C = PPU_BG[2].BGCnt;
@@ -1032,38 +1086,38 @@ void PPU_ModeChange(u8 newmode)
 	switch (newmode)
 	{
 		case 0:
-			PPU_SetupBG(0, 4, 0x00000000, 0);
-			PPU_SetupBG(1, 4, 0x10101010, 0);
-			PPU_SetupBG(2, 4, 0x20202020, 0);
-			PPU_SetupBG(3, 4, 0x30303030, 0);
+			PPU_SetupBG(0, 4, 0);
+			PPU_SetupBG(1, 4, 0x8000);
+			PPU_SetupBG(2, 4, 0);
+			PPU_SetupBG(3, 4, 0x8000);
 			break;
 		
 		case 1:
-			PPU_SetupBG(0, 16, 0, 0);
-			PPU_SetupBG(1, 16, 0, 0);
-			PPU_SetupBG(2, 4, 0, 0x8000);
-			PPU_SetupBG(3, 0, 0, 0);
+			PPU_SetupBG(0, 16, 0);
+			PPU_SetupBG(1, 16, 0);
+			PPU_SetupBG(2, 4, 0x8000);
+			PPU_SetupBG(3, 0, 0);
 			break;
 			
 		case 2:
-			PPU_SetupBG(0, 16, 0, 0);
-			PPU_SetupBG(1, 16, 0, 0);
-			PPU_SetupBG(2, 0, 0, 0);	// TODO OFFSET PER TILE
-			PPU_SetupBG(3, 0, 0, 0);
+			PPU_SetupBG(0, 16, 0);
+			PPU_SetupBG(1, 16, 0);
+			PPU_SetupBG(2, 0, 0);	// TODO OFFSET PER TILE
+			PPU_SetupBG(3, 0, 0);
 			break;
 			
 		case 3:
-			PPU_SetupBG(0, 256, 0, 0xFF);
-			PPU_SetupBG(1, 16, 0, 0);
-			PPU_SetupBG(2, 0, 0, 0);
-			PPU_SetupBG(3, 0, 0, 0);
+			PPU_SetupBG(0, 256, 0xFF);
+			PPU_SetupBG(1, 16, 0);
+			PPU_SetupBG(2, 0, 0);
+			PPU_SetupBG(3, 0, 0);
 			break;
 			
 		case 4:
-			PPU_SetupBG(0, 256, 0, 0xFF);
-			PPU_SetupBG(1, 4, 0, 0);
-			PPU_SetupBG(2, 0, 0, 0);  // TODO OFFSET PER TILE
-			PPU_SetupBG(3, 0, 0, 0);
+			PPU_SetupBG(0, 256, 0xFF);
+			PPU_SetupBG(1, 4, 0);
+			PPU_SetupBG(2, 0, 0);  // TODO OFFSET PER TILE
+			PPU_SetupBG(3, 0, 0);
 			break;
 			
 		// TODO modes 5/6 (hires)
@@ -1600,21 +1654,19 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x06: // mosaic
-			if (val & 0x01) PPU_BG[0].BGCnt |= 0x0040;
-			else PPU_BG[0].BGCnt &= 0xFFFFFFBF;
-			if (val & 0x02) PPU_BG[1].BGCnt |= 0x0040;
-			else PPU_BG[1].BGCnt &= 0xFFFFFFBF;
-			if (val & 0x04) PPU_BG[2].BGCnt |= 0x0040;
-			else PPU_BG[2].BGCnt &= 0xFFFFFFBF;
-			if (val & 0x08) PPU_BG[3].BGCnt |= 0x0040;
-			else PPU_BG[3].BGCnt &= 0xFFFFFFBF;
+			{
+				int i;
+				for (i = 0; i < 4; i++)
+				{
+					PPU_Background* bg = &PPU_BG[i];
+					if (val & (1 << i)) bg->BGCnt |= 0x0040;
+					else bg->BGCnt &= 0xFFFFFFBF;
+					
+					*bg->BGCNT = bg->BGCnt;
+				}
 			
-			/**(vu16*)0x04000008 = PPU_BG[0].BGCnt;
-			*(vu16*)0x0400000A = PPU_BG[1].BGCnt;
-			*(vu16*)0x0400000C = PPU_BG[2].BGCnt;
-			*(vu16*)0x0400000E = PPU_BG[3].BGCnt;*/
-			
-			*(vu16*)0x0400004C = (val & 0xF0) | (val >> 4);
+				*(vu16*)0x0400004C = (val & 0xF0) | (val >> 4);
+			}
 			break;
 			
 		case 0x07: PPU_SetBGSCR(0, val); break;
@@ -1763,6 +1815,10 @@ void PPU_Write8(u32 addr, u8 val)
 			PPU_ScheduleLineChange(PPU_SetSubScreen, val & 0x1F);
 			break;
 			
+		case 0x31:
+			PPU_ScheduleLineChange(PPU_SetColorMath, val);
+			break;
+			
 		case 0x32:
 			{
 				u8 intensity = val & 0x1F;
@@ -1770,8 +1826,7 @@ void PPU_Write8(u32 addr, u8 val)
 				if (val & 0x40) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFFFC1F) | (intensity << 5);
 				if (val & 0x80) PPU_SubBackdrop = (PPU_SubBackdrop & 0xFFFF83FF) | (intensity << 10);
 				
-				// TODO do this better
-				*(u16*)0x05000000 = PPU_SubBackdrop ? PPU_SubBackdrop : PPU_MainBackdrop;
+				PPU_ScheduleLineChange(PPU_SetSubBackdrop, PPU_SubBackdrop);
 			}
 			break;
 			
@@ -1840,10 +1895,13 @@ ITCM_CODE void PPU_VBlank()
 	// (especially master brightness)
 	if (PPU_VCount < 262)
 	{
+		//iprintf("VBlank [miss]\n");
 		PPU_MissedVBlank = true;
+		PPU_DoLineChanges(192);
 		return;
 	}
 	
+	//iprintf("VBlank\n");
 	PPU_MissedVBlank = false;
 	
 	*(u16*)0x0400006C = PPU_MasterBright;
@@ -1943,4 +2001,7 @@ ITCM_CODE void PPU_HBlank()
 		//iprintf("mode7 %04X|%04X %04X|%04X %04X|%04X|%04X|%04X\n",
 		//	xscroll, yscroll, PPU_M7RefX, PPU_M7RefY, PPU_M7A, PPU_M7B, PPU_M7C, PPU_M7D);
 	}
+	
+	if (PPU_BGStatusDirty) 
+		PPU_UpdateEnabledBGs();
 }

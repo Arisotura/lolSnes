@@ -2,6 +2,9 @@ lolSnes
 
 A SNES emulator for the DS. My goal is to make rendering the most accurate possible, we'll see how far I can get.
 
+** EmuCR please stop copypasting this every time you post a lolSnes build. It is almost always outdated. Either 
+** spend some time determining a more accurate feature list, or don't release Git builds.
+
 Considering the DS isn't powerful enough to handle a line-accurate software renderer AND emulate the CPU and other
 funny things at the same time, I have to emulate graphics using the DS hardware. Reproducing the functions it
 doesn't support (like per-tile priority or funky color effects) will be the challenge. How they will be emulated
@@ -10,13 +13,18 @@ will also depend on how games use them.
 What is currently supported
 
 * CPU -- 99% (all opcodes emulated; may miss a few unimportant bits about timing)
-* PPU -- ~20% (supports 2bpp and 4bpp BGs with scrolling)
+* PPU -- ~50% (2bpp, 4bpp and 8bpp graphics, modes 0-4 and 7, mosaic, master brightness)
+* SPC700 -- 90% (most important stuff emulated)
+* DSP -- ~80% (code taken from SNemulDS. Emulates BRR sound with envelopes. Seems to lack noise and echo.)
+* DMA -- 50% (HDMA not supported yet, and DMA method is inefficient)
+* Support for large ROMs via intelligent ROM cache system
+* Regular joypad
+* Linear audio interpolation (the SNES does Gaussian interpolation, but the DS isn't powerful enough)
 
-Next priority
+What is NOT supported
 
-* SPC700 support -- any ROM that isn't a basic test, requires basic SPC700 functionality
-* More PPU stuff -- OBJ support, and perhaps 8bpp BGs
-* Proper interface (or atleast letting users select a ROM)
+* Expansion chips
+* Multiplayer
 
 
 100% accurate graphics emulation is impossible, but we'll do our best.
@@ -25,10 +33,10 @@ Next priority
 How to use
 
 Place lolsnes.nds in your flashcart's root folder (or wherever DS ROMs are). In the same folder, create a folder 
-named 'snes', and place your ROM in there, under the name 'rom.smc'.
+named 'snes', and place your ROMs in there.
 
 lolSnes is able to properly detect the ROM type in most cases. Headered and headerless ROMs are supported, both
 LoROM and HiROM.
 
-lolSnes isn't very exciting, though. Few things will run without entering an endless loop due to the lack of
-SPC700 support.
+Once it starts, you should see a (not so) fancy ROM selection menu. Select the ROM you want to play, and press
+A or B. Then uh... see what happens. Some games run, others explode spectacularly or just do nothing.

@@ -431,11 +431,11 @@ void PPU_UpdateEnabledBGs()
 			u8* newprio = &PPU_PrioTable[(mode << 9) + (prionum << 4)];
 			bool reassign = ((!(dirty & 0x01)) && (*(u32*)&newprio[0] != *(u32*)&PPU_CurPrio[0]));
 			
-			iprintf("prio: %d %02X | %02X %02X\n", mode, prionum, PPU_BGMain, PPU_BGSub);
+			/*iprintf("prio: %d %02X | %02X %02X\n", mode, prionum, PPU_BGMain, PPU_BGSub);
 			iprintf(" %d %d %d %d\n", newprio[0], newprio[1], newprio[2], newprio[3]);
 			iprintf(" %d %d %d %d\n", newprio[4], newprio[5], newprio[6], newprio[7]);
 			iprintf(" %d %d %d %d\n", newprio[8], newprio[9], newprio[10], newprio[11]);
-			iprintf(" %d %d %d %d\n", newprio[12], newprio[13], newprio[14], newprio[15]);
+			iprintf(" %d %d %d %d\n", newprio[12], newprio[13], newprio[14], newprio[15]);*/
 			
 			if (mode != 7)
 			{
@@ -460,6 +460,7 @@ void PPU_UpdateEnabledBGs()
 					}
 					
 					*bg->BGCNT = bg->BGCnt;
+					//iprintf("%08X = %04X\n", bg->BGCNT, bg->BGCnt);
 				}
 			}
 			
@@ -587,23 +588,10 @@ ITCM_CODE void PPU_HandleModeChange(u32 val)
 {
 	if (val & 0xF0) iprintf("!! 16x16 TILES NOT SUPPORTED\n");
 	
-	PPU_BG3Prio = ((val & 0x0F) == 0x09);
-	/*if (PPU_BG3Prio)
-	{
-		PPU_OBJPrio[0] = 3 << 10;
-		PPU_OBJPrio[1] = 3 << 10;
-		PPU_OBJPrio[2] = 2 << 10;
-		PPU_OBJPrio[3] = 1 << 10;
-		PPU_UpdateOBJPrio();
-	}
-	else
-	{
-		PPU_OBJPrio[0] = 3 << 10;
-		PPU_OBJPrio[1] = 2 << 10;
-		PPU_OBJPrio[2] = 1 << 10;
-		PPU_OBJPrio[3] = 0 << 10;
-		PPU_UpdateOBJPrio();
-	}*/
+	u32 mode = val & 0x0F;
+	if (mode == 9) mode = 8;
+	else mode &= 0x07;
+	PPU_CurPrio = &PPU_PrioTable[(mode << 9) + (PPU_CurPrioNum << 4)];
 	
 	PPU_ModeChange(val & 0x07);
 	PPU_BGStatusDirty |= 0x01;
@@ -973,7 +961,7 @@ void PPU_SetupBG(int nbg, int depth, u16 mappaloffset)
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	register u8 dsbg = PPU_CurPrio[nbg];
-	iprintf("BG%d ON DS BG%d\n", nbg, dsbg);
+	iprintf("BG%d ON DS BG%d %08X\n", nbg, dsbg, PPU_CurPrio);
 	bg->DSBG = dsbg;
 	bg->Mask = 1 << dsbg;
 	
@@ -1039,7 +1027,7 @@ void PPU_ModeChange(u8 newmode)
 	
 	if (newmode == PPU_Mode) return;
 	
-	PPU_BGPrio = &_PPU_BGPrio[PPU_BG3Prio ? 8 : newmode][0];
+	//PPU_BGPrio = &_PPU_BGPrio[PPU_BG3Prio ? 8 : newmode][0];
 	
 	if ((PPU_Mode == 7) ^ (newmode == 7))
 	{

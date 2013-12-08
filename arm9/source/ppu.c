@@ -23,10 +23,6 @@
 
 #include "ppu_prio.h"
 
-// PPU
-//
-// TODO LIST:
-// * (take SPC stuff out of the PPU?)
 
 
 #define BG_CHR_BASE		0x06000000
@@ -37,6 +33,8 @@
 
 
 u32 PPU_Planar2Linear[16][16];
+
+u8 PPU_Tilemap2Linear[256];
 
 
 // TODO make this configurable
@@ -101,9 +99,16 @@ PPU_VRAMBlock PPU_VRAMMap[32];
 // bank C: ARM7 VRAM
 // bank H: bottom screen
 
-// keeps track of blank tiles
-// 1 bit per 2 pixels
-//u32 PPU_TileUsage[4][1024];
+
+// per-line tile priority support
+// (gross hack)
+// if 50% or more of the onscreen tiles on a given scanline have high prio,
+// the whole BG is given high prio during the scanline
+// for faster checking, we just count the number of high prio tiles per
+// group of 16 tiles (128 pixels)
+
+u16 PPU_HighPrioTiles[4][64][4] DTCM_BSS;
+
 
 typedef struct
 {
@@ -117,6 +122,7 @@ typedef struct
 	u16 MapPalOffset;
 	
 	u16 ScrollX, ScrollY;
+	u8 PrioStatus;
 	
 	u16 BGCnt;
 	
@@ -129,20 +135,6 @@ typedef struct
 
 } PPU_Background;
 PPU_Background PPU_BG[4];
-
-u8 _PPU_BGPrio[9][8] = 
-{
-	{1, 1, 3, 3, 0, 0, 2, 2},	// mode 0
-	{1, 1, 3, 0, 0, 0, 2, 0},	// mode 1
-	{2, 3, 0, 0, 0, 1, 0, 0},	// mode 2
-	{2, 3, 0, 0, 0, 1, 0, 0},	// mode 3
-	{2, 3, 0, 0, 0, 1, 0, 0},	// mode 4
-	{2, 3, 0, 0, 0, 1, 0, 0},	// mode 5
-	{2, 0, 0, 0, 0, 0, 0, 0},	// mode 6
-	{2, 0, 0, 0, 0, 0, 0, 0},	// mode 7
-	{2, 2, 3, 0, 1, 1, 0, 0}	// mode 1 w/ high prio
-};
-u8* PPU_BGPrio;
 
 u8 PPU_CurPrioNum;
 u8* PPU_CurPrio;
@@ -253,6 +245,21 @@ void PPU_Reset()
 				| ((b1 & 0x01) << 24) | ((b2 & 0x01) << 25);
 	}
 	
+	for (i = 0; i < 256; i++)
+	{
+		// 0-63: area 0
+		// 64-127: area 1
+		// 128-191: area 2
+		// 192-255: area 3
+		
+		int area_h = (i & 0x40) >> 6;
+		int area_v = i >> 7;
+		int offset_h = i & 0x1;
+		int offset_v = (i & 0x3F) >> 1;
+		
+		PPU_Tilemap2Linear[i] = offset_h | (area_h << 1) | (offset_v << 2) | (area_v << 7);
+	}
+	
 	PPU_M7RefDirty = 0;
 	PPU_M7RefX = 0;
 	PPU_M7RefY = 0;
@@ -287,19 +294,14 @@ void PPU_Reset()
 		PPU_VRAMMap[i].ChrUsage = 0;
 		PPU_VRAMMap[i].ScrUsage = 0;
 	}
-	/*for (i = 0; i < 4; i++)
-		PPU_VRAMMap[i].ChrUsage = 0x1F;
-	for (i = 8; i < 8; i++)
-		PPU_VRAMMap[i].ChrUsage = 0x0F;
-	PPU_VRAMMap[0].ScrUsage = 0x1F;*/
 	
-	/*for (i = 0; i < 1024; i++)
+	for (i = 0; i < 64*4; i++)
 	{
-		PPU_TileUsage[0][i] = 0;
-		PPU_TileUsage[1][i] = 0;
-		PPU_TileUsage[2][i] = 0;
-		PPU_TileUsage[3][i] = 0;
-	}*/
+		PPU_HighPrioTiles[0][i>>2][i&3] = 0x1000;
+		PPU_HighPrioTiles[1][i>>2][i&3] = 0x1000;
+		PPU_HighPrioTiles[2][i>>2][i&3] = 0x1000;
+		PPU_HighPrioTiles[3][i>>2][i&3] = 0x1000;
+	}
 	
 	for (i = 0; i < 0x10000; i += 4)
 		*(u32*)&PPU_VRAM[i] = 0;
@@ -314,6 +316,8 @@ void PPU_Reset()
 		
 		bg->ScrollX = 0;
 		bg->ScrollY = 0;
+		
+		bg->PrioStatus = 4;
 	}
 	
 	
@@ -380,7 +384,8 @@ void PPU_Reset()
 	PPU_ModeChange(0);
 	
 	
-	printf("vram = %08X | %08X\n", (u32)&PPU_VRAM, (u32)&PPU_VRAMMap);
+	iprintf("vram = %08X | %08X\n", (u32)&PPU_VRAM, (u32)&PPU_VRAMMap);
+	iprintf("hptiles = %08X\n", (u32)&PPU_HighPrioTiles);
 }
 
 
@@ -443,7 +448,7 @@ void PPU_UpdateEnabledBGs()
 				{
 					PPU_Background* bg = &PPU_BG[i];
 					
-					bg->BGCnt = (bg->BGCnt & 0xFFFFFFFC) | newprio[4 + i];
+					bg->BGCnt = (bg->BGCnt & 0xFFFFFFFC) | newprio[bg->PrioStatus + i];
 					
 					if (reassign)
 					{
@@ -456,7 +461,7 @@ void PPU_UpdateEnabledBGs()
 						bg->BGVOFS = (u16*)(0x04000012 + (dsbg << 2));
 						
 						*bg->BGHOFS = bg->ScrollX;
-						*bg->BGVOFS = bg->ScrollY;
+						*bg->BGVOFS = bg->ScrollY + PPU_YOffset;
 					}
 					
 					*bg->BGCNT = bg->BGCnt;
@@ -545,6 +550,7 @@ void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 	change->Data = data;
 	if (nchanges < (MAX_LINE_CHANGES-1))
 		PPU_NumLineChanges[vcount]++;
+	else iprintf("!! PLC OVERFLOW %d %08X %08X\n", vcount, action, data);
 }
 
 void PPU_ResetLineChanges()
@@ -589,8 +595,16 @@ ITCM_CODE void PPU_HandleModeChange(u32 val)
 	if (val & 0xF0) iprintf("!! 16x16 TILES NOT SUPPORTED\n");
 	
 	u32 mode = val & 0x0F;
-	if (mode == 9) mode = 8;
-	else mode &= 0x07;
+	if (mode == 9) 
+	{
+		mode = 8;
+		PPU_BG3Prio = 1;
+	}
+	else 
+	{
+		mode &= 0x07;
+		PPU_BG3Prio = 0;
+	}
 	PPU_CurPrio = &PPU_PrioTable[(mode << 9) + (PPU_CurPrioNum << 4)];
 	
 	PPU_ModeChange(val & 0x07);
@@ -794,7 +808,7 @@ void PPU_UploadBGChr(int nbg)
 		for (t = 0; t < 1024; t++)
 		{
 			int y;
-			//u32 usage = 0;
+
 			for (y = 0; y < 8; y++)
 			{
 				u8 	b1 = *bp12++,
@@ -802,15 +816,7 @@ void PPU_UploadBGChr(int nbg)
 
 				*dst++ = PPU_Planar2Linear[b1 >> 4][b2 >> 4];
 				*dst++ = PPU_Planar2Linear[b1 & 0xF][b2 & 0xF];
-						
-				/*if (*(dst-4)) usage |= 0x8;
-				if (*(dst-3)) usage |= 0x4;
-				if (*(dst-2)) usage |= 0x2;
-				if (*(dst-1)) usage |= 0x1;
-				usage <<= 4;*/
 			}
-			
-			//PPU_TileUsage[nbg][t] = usage;
 		}
 	}
 	else if (bg->ColorDepth == 16)
@@ -823,7 +829,7 @@ void PPU_UploadBGChr(int nbg)
 		for (t = 0; t < 1024; t++)
 		{
 			int y;
-			//u32 usage = 0;
+
 			for (y = 0; y < 8; y++)
 			{
 				u8 	b1 = *bp12++,
@@ -833,15 +839,8 @@ void PPU_UploadBGChr(int nbg)
 
 				*dst++ = PPU_Planar2Linear[b1 >> 4][b2 >> 4] | (PPU_Planar2Linear[b3 >> 4][b4 >> 4] << 2);
 				*dst++ = PPU_Planar2Linear[b1 & 0xF][b2 & 0xF] | (PPU_Planar2Linear[b3 & 0xF][b4 & 0xF] << 2);
-						
-				/*if (*(dst-4)) usage |= 0x8;
-				if (*(dst-3)) usage |= 0x4;
-				if (*(dst-2)) usage |= 0x2;
-				if (*(dst-1)) usage |= 0x1;
-				usage <<= 4;*/
 			}
 			
-			//PPU_TileUsage[nbg][t] = usage;
 			bp12 += 16;
 			bp34 += 16;
 		}
@@ -886,36 +885,54 @@ void PPU_UploadBGChr(int nbg)
 void PPU_UploadBGScr(int nbg)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
+	u8* tm2l = &PPU_Tilemap2Linear[0];
+	u16* hptiles = (u8*)&PPU_HighPrioTiles[nbg];
+	bool thinbg = !(bg->BGCnt & 0x4000);
 	
 	if (bg->ColorDepth == 0)
 		return;
 	
-	int bgsize = bg->ScrSize;
+	int bgsize = bg->ScrSize >> 1;
 	u16* src = (u16*)&PPU_VRAM[bg->ScrBase];
 	u16* dst = (u16*)(BG_SCR_BASE + (nbg << 13));
 	register u16 palbase = bg->MapPalOffset;
 	
 	int t;
+	u16 hpt = 0;
 	for (t = 0; t < bgsize; t++)
 	{
 		u16 stile = *src++;
 		u16 dtile = stile & 0x03FF;
 		
-		if (stile & 0x2000)
+		if (stile == 0) hpt += 0x0100; // dirty hack
+		else
 		{
-			// tile with priority
-			// TODO
+			// since we are counting up to 16 tiles, this won't cause overflow
+			if (stile & 0x2000) hpt += 0x0001;
+			
+			if (stile & 0x4000)
+				dtile |= 0x0400;
+			if (stile & 0x8000)
+				dtile |= 0x0800;
+			
+			if (palbase != 0xFF)
+				dtile |= ((stile & 0x1C00) << 2) | palbase;
 		}
-		
-		if (stile & 0x4000)
-			dtile |= 0x0400;
-		if (stile & 0x8000)
-			dtile |= 0x0800;
-		
-		if (palbase != 0xFF)
-			dtile |= ((stile & 0x1C00) << 2) | palbase;
 			
 		*dst++ = dtile;
+		
+		if ((t & 0xF) == 0xF)
+		{
+			hptiles[*tm2l] = hpt;
+			if (!(bg->BGCnt & 0x4000))
+				hptiles[(*tm2l) + 2] = hpt;
+			
+			tm2l++;
+			hpt = 0;
+			
+			if (thinbg && ((t & 0x3FF) == 0x3FF))
+				tm2l += 64;
+		}
 	}
 }
 
@@ -961,7 +978,7 @@ void PPU_SetupBG(int nbg, int depth, u16 mappaloffset)
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	register u8 dsbg = PPU_CurPrio[nbg];
-	iprintf("BG%d ON DS BG%d %08X\n", nbg, dsbg, PPU_CurPrio);
+	
 	bg->DSBG = dsbg;
 	bg->Mask = 1 << dsbg;
 	
@@ -1027,8 +1044,6 @@ void PPU_ModeChange(u8 newmode)
 	
 	if (newmode == PPU_Mode) return;
 	
-	//PPU_BGPrio = &_PPU_BGPrio[PPU_BG3Prio ? 8 : newmode][0];
-	
 	if ((PPU_Mode == 7) ^ (newmode == 7))
 	{
 		PPU_Mode = newmode;
@@ -1038,7 +1053,7 @@ void PPU_ModeChange(u8 newmode)
 		{
 			// switch to mode 7
 			*(u32*)0x04000000 = 0x00010002 | (4 << 24) | (4 << 27) | ((bgenable & 0x01) ? 0x400:0) | ((bgenable & 0x10) ? 0x1000:0);
-			*(u16*)0x0400000C = 0xC082 | (2 << 2) | (24 << 8);
+			*(u16*)0x0400000C = 0xC082 | (2 << 2) | (24 << 8) | (PPU_BG[0].BGCnt & 0x0040);
 			//*(u16*)0x0400000E = 0x0083 | (3 << 4) | (3 << 10);
 			
 			return;
@@ -1048,25 +1063,8 @@ void PPU_ModeChange(u8 newmode)
 		*(u32*)0x04000000 = 0x40010000 | (4 << 27) | (bgenable << 8);
 
 		if (PPU_LastNon7Mode == newmode)
-		{
-			/**(u16*)0x04000008 = PPU_BG[0].BGCnt;
-			*(u16*)0x0400000A = PPU_BG[1].BGCnt;
-			*(u16*)0x0400000C = PPU_BG[2].BGCnt;
-			*(u16*)0x0400000E = PPU_BG[3].BGCnt;*/
 			return;
-		}
 	}
-	
-	/*PPU_BG[0].BGCnt = (PPU_BG[0].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[0];
-	PPU_BG[1].BGCnt = (PPU_BG[1].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[1];
-	PPU_BG[2].BGCnt = (PPU_BG[2].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[2];
-	PPU_BG[3].BGCnt = (PPU_BG[3].BGCnt & 0xFFFFFFFC) | PPU_BGPrio[3];*/
-	//*(vu16*)0x04000050 = 0x0164;
-	//*(vu16*)0x04000052 = 0x0808;
-	/**(u16*)0x04000008 = PPU_BG[0].BGCnt;
-	*(u16*)0x0400000A = PPU_BG[1].BGCnt;
-	*(u16*)0x0400000C = PPU_BG[2].BGCnt;
-	*(u16*)0x0400000E = PPU_BG[3].BGCnt;*/
 	
 	PPU_Mode = newmode;
 	PPU_LastNon7Mode = newmode;
@@ -1269,14 +1267,6 @@ void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 		
 		*(u32*)vramptr = PPU_Planar2Linear[(val & 0x00F0) >> 4][val >> 12];
 		*(u32*)(vramptr + 4) = PPU_Planar2Linear[val & 0x000F][(val & 0x0F00) >> 8];
-								
-		/*u32 usage = PPU_TileUsage[nbg][addr >> 4];
-		int shift = (addr & 0xE) << 1;
-		if (*(u16*)vramptr) usage |= 0x8;
-		if (*(u16*)(vramptr + 2)) usage |= 0x4;
-		if (*(u16*)(vramptr + 4)) usage |= 0x2;
-		if (*(u16*)(vramptr + 6)) usage |= 0x1;
-		PPU_TileUsage[nbg][addr >> 4] = (PPU_TileUsage*/
 	}
 	else if (bg->ColorDepth == 16)
 	{
@@ -1324,27 +1314,47 @@ void PPU_UpdateVRAM_CHR(int nbg, u32 addr, u16 val)
 	}
 }
 
-void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 stile)
+void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 oldtile, u16 stile)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
 	u16 dtile = stile & 0x03FF;
 	u16 paloffset = bg->MapPalOffset;
+	
+	u32 offset = addr - bg->ScrBase;
+	bool thinbg = !(bg->BGCnt & 0x4000);
+	u16* hptiles;
+	
+	if (thinbg)
+		hptiles = &PPU_HighPrioTiles[nbg][0][0] + PPU_Tilemap2Linear[(offset + (offset & 0x800)) >> 5];
+	else
+		hptiles = &PPU_HighPrioTiles[nbg][0][0] + PPU_Tilemap2Linear[offset >> 5];
 		
-	if (stile & 0x2000)
+	if (oldtile == 0)
+		(*hptiles) -= 0x0100;
+	else if (oldtile & 0x2000)
+		(*hptiles) -= 0x0001;
+		
+	if (stile == 0)
 	{
-		// tile with priority
-		// TODO
+		(*hptiles) += 0x0100;
+	}
+	else
+	{
+		if (stile & 0x2000) (*hptiles) += 0x0001;
+		
+		if (stile & 0x4000)
+			dtile |= 0x0400;
+		if (stile & 0x8000)
+			dtile |= 0x0800;
+		
+		if (paloffset != 0xFF)
+			dtile |= ((stile & 0x1C00) << 2) | paloffset;
 	}
 	
-	if (stile & 0x4000)
-		dtile |= 0x0400;
-	if (stile & 0x8000)
-		dtile |= 0x0800;
+	if (thinbg)
+		*(hptiles + 2) = *hptiles;
 	
-	if (paloffset != 0xFF)
-		dtile |= ((stile & 0x1C00) << 2) | paloffset;
-	
-	*(u16*)(BG_SCR_BASE + (nbg << 13) + addr - bg->ScrBase) = dtile;
+	*(u16*)(BG_SCR_BASE + (nbg << 13) + offset) = dtile;
 }
 
 void PPU_UpdateVRAM_OBJ(u32 addr, u16 val)
@@ -1403,7 +1413,7 @@ void PPU_UpdateVRAM_Mode7(u32 addr, u16 val)
 	}
 }
 
-inline void PPU_UpdateVRAM(u32 addr, u16 val)
+inline void PPU_UpdateVRAM(u32 addr, u16 oldval, u16 val)
 {
 	PPU_VRAMBlock* block = &PPU_VRAMMap[addr >> 11];
 	
@@ -1413,14 +1423,12 @@ inline void PPU_UpdateVRAM(u32 addr, u16 val)
 	if (block->ChrUsage & 0x0008) PPU_UpdateVRAM_CHR(3, addr, val);
 	if (block->ChrUsage & 0x0010) PPU_UpdateVRAM_OBJ(addr, val);
 	
-	if (block->ScrUsage & 0x0001) PPU_UpdateVRAM_SCR(0, addr, val);
-	if (block->ScrUsage & 0x0002) PPU_UpdateVRAM_SCR(1, addr, val);
-	if (block->ScrUsage & 0x0004) PPU_UpdateVRAM_SCR(2, addr, val);
-	if (block->ScrUsage & 0x0008) PPU_UpdateVRAM_SCR(3, addr, val);
+	if (block->ScrUsage & 0x0001) PPU_UpdateVRAM_SCR(0, addr, oldval, val);
+	if (block->ScrUsage & 0x0002) PPU_UpdateVRAM_SCR(1, addr, oldval, val);
+	if (block->ScrUsage & 0x0004) PPU_UpdateVRAM_SCR(2, addr, oldval, val);
+	if (block->ScrUsage & 0x0008) PPU_UpdateVRAM_SCR(3, addr, oldval, val);
 	
 	if (addr < 0x8000) PPU_UpdateVRAM_Mode7(addr, val);
-	
-	//if (addr < 0x1000) *(vu32*)0x040000E8 = *(vu32*)0x040000EC;
 }
 
 void PPU_UpdateOAM(u16 addr, u16 val)
@@ -1643,14 +1651,21 @@ void PPU_Write8(u32 addr, u8 val)
 			
 		case 0x06: // mosaic
 			{
-				int i;
-				for (i = 0; i < 4; i++)
+				if (PPU_ModeNow == 7)
 				{
-					PPU_Background* bg = &PPU_BG[i];
-					if (val & (1 << i)) bg->BGCnt |= 0x0040;
-					else bg->BGCnt &= 0xFFFFFFBF;
-					
-					*bg->BGCNT = bg->BGCnt;
+					*(u16*)0x0400000C = 0xC082 | (2 << 2) | (24 << 8) | (val & 0x01) << 6;
+				}
+				else
+				{
+					int i;
+					for (i = 0; i < 4; i++)
+					{
+						PPU_Background* bg = &PPU_BG[i];
+						if (val & (1 << i)) bg->BGCnt |= 0x0040;
+						else bg->BGCnt &= 0xFFFFFFBF;
+						
+						*bg->BGCNT = bg->BGCnt;
+					}
 				}
 			
 				*(vu16*)0x0400004C = (val & 0xF0) | (val >> 4);
@@ -1711,8 +1726,9 @@ void PPU_Write8(u32 addr, u8 val)
 				addr = (PPU_VRAMAddr << 1) & 0xFFFEFFFF;
 				if (PPU_VRAM[addr] != val)
 				{
+					u16 oldval = *(u16*)&PPU_VRAM[addr];
 					PPU_VRAM[addr] = val;
-					PPU_UpdateVRAM(addr, *(u16*)&PPU_VRAM[addr]);
+					PPU_UpdateVRAM(addr, oldval, *(u16*)&PPU_VRAM[addr]);
 				}
 				if (!(PPU_VRAMInc & 0x80))
 					PPU_VRAMAddr += PPU_VRAMStep;
@@ -1723,9 +1739,10 @@ void PPU_Write8(u32 addr, u8 val)
 				addr = ((PPU_VRAMAddr << 1) + 1) & 0xFFFEFFFF;
 				if (PPU_VRAM[addr] != val)
 				{
+					u16 oldval = *(u16*)&PPU_VRAM[addr-1];
 					PPU_VRAM[addr] = val;
 					addr--;
-					PPU_UpdateVRAM(addr, *(u16*)&PPU_VRAM[addr]);
+					PPU_UpdateVRAM(addr, oldval, *(u16*)&PPU_VRAM[addr]);
 				}
 				if (PPU_VRAMInc & 0x80)
 					PPU_VRAMAddr += PPU_VRAMStep;
@@ -1968,6 +1985,7 @@ ITCM_CODE void PPU_HBlank()
 	u16 ds_vcount = *(vu16*)0x04000006 + 1;
 	if (ds_vcount >= 263) ds_vcount = 0;
 	if (ds_vcount >= 192) return;
+	u16 yoffset = ds_vcount + PPU_YOffset;
 	
 	PPU_DoLineChanges(ds_vcount);
 	
@@ -1978,16 +1996,48 @@ ITCM_CODE void PPU_HBlank()
 		PPU_M7RefDirty = 0;
 		
 		s16 xscroll = PPU_M7ScrollX;
-		s16 yscroll = PPU_M7ScrollY + PPU_YOffset;
+		s16 yscroll = PPU_M7ScrollY;
 		
 		*(vs16*)0x04000020 = PPU_M7A;
 		*(vs16*)0x04000022 = PPU_M7B;
 		*(vs16*)0x04000024 = PPU_M7C;
 		*(vs16*)0x04000026 = PPU_M7D;
-		*(vs32*)0x04000028 = (PPU_M7RefX << 8) + (PPU_M7A * (-PPU_M7RefX + xscroll)) + (PPU_M7B * (-PPU_M7RefY + yscroll + ds_vcount));
-		*(vs32*)0x0400002C = (PPU_M7RefY << 8) + (PPU_M7C * (-PPU_M7RefX + xscroll)) + (PPU_M7D * (-PPU_M7RefY + yscroll + ds_vcount));
+		*(vs32*)0x04000028 = (PPU_M7RefX << 8) + (PPU_M7A * (-PPU_M7RefX + xscroll)) + (PPU_M7B * (-PPU_M7RefY + yscroll + yoffset));
+		*(vs32*)0x0400002C = (PPU_M7RefY << 8) + (PPU_M7C * (-PPU_M7RefX + xscroll)) + (PPU_M7D * (-PPU_M7RefY + yscroll + yoffset));
 		//iprintf("mode7 %04X|%04X %04X|%04X %04X|%04X|%04X|%04X\n",
 		//	xscroll, yscroll, PPU_M7RefX, PPU_M7RefY, PPU_M7A, PPU_M7B, PPU_M7C, PPU_M7D);
+	}
+	
+	PPU_Background* bg;
+	u16* hptiles = (u16*)&PPU_HighPrioTiles[0];
+	int i;
+	for (bg = &PPU_BG[0], i = 0; bg < &PPU_BG[4] && bg->ColorDepth > 0; bg++, i++)
+	{
+		u16 voffset = ((bg->ScrollY + yoffset) >> 3) & ((bg->BGCnt & 0x8000) ? 0x3F : 0x1F);
+		u16 hoffset = bg->ScrollX >> 6;
+		u16* hpt = &hptiles[voffset << 2];
+		
+		u16 subhoffset = hoffset & 1;
+		hoffset >>= 1;
+		int tilesum = hpt[(hoffset + 1) & 3];
+		if (subhoffset) tilesum += hpt[(hoffset + 2) & 3];
+		else tilesum += hpt[hoffset & 3];
+		
+		u8 ps;
+		if ((tilesum & 0x00FF) && (((tilesum & 0xFF) + (tilesum >> 8)) >= 16))
+			ps = 8;
+		else
+			ps = 4;
+		
+		if (ps != bg->PrioStatus)
+		{
+			bg->PrioStatus = ps;
+			
+			bg->BGCnt = (bg->BGCnt & 0xFFFFFFFC) | PPU_CurPrio[ps + i];
+			*bg->BGCNT = bg->BGCnt;
+		}
+		
+		hptiles += 64*4;
 	}
 	
 	if (PPU_BGStatusDirty) 

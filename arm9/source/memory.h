@@ -28,10 +28,12 @@
 
 typedef struct
 {
-	u8 __pad0[3];
-	u8 HVBFlags;	// bit7: vblank | bit6: hblank | bit5: vblank (ack) | bit4: IRQ (ack)
+	u32 SRAMMask;	// -0xC
 	
-	u32 SRAMDirty;
+	u8 __pad0[3];	// -0x8
+	u8 HVBFlags;	// -0x5 | bit7: vblank | bit6: hblank | bit5: vblank (ack) | bit4: IRQ (ack)
+	
+	u32 SRAMDirty;	// -0x4
 	
 } Mem_StatusData;
 

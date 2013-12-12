@@ -65,6 +65,9 @@ _MemRead8:
 	tst r3, #0x20000000
 	bne mr8_1
 	
+	tst r3, #0x80000000
+	ldrne r1, [memoryMap, #-0xC]
+	andne r0, r0, r1
 	bic r3, r3, #0xF0000000
 	mov r0, r0, lsl #0x13
 	ldrb r0, [r3, r0, lsr #0x13]
@@ -91,6 +94,9 @@ _MemRead16:
 	tst r3, #0x20000000
 	bne mr16_1
 	
+	tst r3, #0x80000000
+	ldrne r1, [memoryMap, #-0xC]
+	andne r0, r0, r1
 	bic r3, r3, #0xF0000000
 	mov r0, r0, lsl #0x13
 	add r3, r3, r0, lsr #0x13
@@ -117,6 +123,10 @@ _MemRead24:
 	tst r3, #0x10000000
 	subeq snesCycles, snesCycles, #0x120000
 	subne snesCycles, snesCycles, #0x180000
+	tst r3, #0x80000000
+	ldrne r2, [memoryMap, #-0xC]
+	andne r0, r0, r2
+	
 	tst r3, #0x20000000
 	bic r3, r3, #0xF0000000
 	mov r0, r0, lsl #0x13
@@ -148,6 +158,8 @@ _MemWrite8:
 	bne Mem_IOWrite8
 	
 	tst r3, #0x80000000
+	ldrne r2, [memoryMap, #-0xC]
+	andne r0, r0, r2
 	strne r3, [memoryMap, #-0x4]
 	bic r3, r3, #0xF0000000
 	mov r0, r0, lsl #0x13
@@ -171,6 +183,8 @@ _MemWrite16:
 	bne Mem_IOWrite16
 
 	tst r3, #0x80000000
+	ldrne r2, [memoryMap, #-0xC]
+	andne r0, r0, r2
 	strne r3, [memoryMap, #-0x4]
 	bic r3, r3, #0xF0000000
 	mov r0, r0, lsl #0x13
@@ -721,7 +735,7 @@ CPU_Cycles:
 	
 CPU_Run:
 	LoadRegs
-	
+
 frameloop:
 		ldr r0, =0x05540000
 		add snesCycles, snesCycles, r0
@@ -759,6 +773,14 @@ emuloop:
 				OpcodePrefetch8
 				ldr pc, [opTable, r0, lsl #0x2]
 op_return:
+@ldr r0, =(PPU_VRAM+0x4C)
+@ldr r0, [r0]
+@ldr r1, =0x0AFD23F4
+@cmp r1, r0
+@yu:
+@beq yu
+@ 6 nops or more make it work
+@nop
 
 				@ <= 1360 (550): HBlank end
 				@ <= 268 (10C): HBlank start

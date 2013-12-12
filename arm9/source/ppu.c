@@ -189,8 +189,6 @@ u8 PPU_SpriteSize[16] =
 	16, 32, 32, 64
 };
 
-u16 PPU_OBJPrio[4] DTCM_DATA;
-
 u8 PPU_BGStatusDirty DTCM_DATA = 0;
 
 
@@ -224,9 +222,13 @@ typedef struct
 	u32 Data;
 	
 } PPU_LineChange;
-PPU_LineChange PPU_LineChanges[193][MAX_LINE_CHANGES];
+// trick: we allocate two slots for 192 since there may be more changes on VBlank
+PPU_LineChange PPU_LineChanges[192 + 2][MAX_LINE_CHANGES];
 u8 PPU_NumLineChanges[193] DTCM_DATA;
 u8 PPU_VBlankChangesDirty DTCM_DATA;
+
+
+void PPU_SetOBJCHR(u16 base, u16 gap);
 
 
 
@@ -342,17 +344,13 @@ void PPU_Reset()
 	
 	
 	PPU_OBJSize = 0;
-	PPU_OBJBase = 0;
-	PPU_OBJGap = 0;
+	PPU_OBJBase = -1;
+	PPU_OBJGap = -1;
 	PPU_OBJSizes = _PPU_OBJSizes;
+	PPU_SetOBJCHR(0, 0);
 	
 	for (i = 0; i < 4*128; i++)
 		PPU_OBJList[i] = 0;
-		
-	PPU_OBJPrio[0] = 3 << 10;
-	PPU_OBJPrio[1] = 2 << 10;
-	PPU_OBJPrio[2] = 1 << 10;
-	PPU_OBJPrio[3] = 0 << 10;
 	
 	PPU_BGStatusDirty = 0;
 		
@@ -501,12 +499,14 @@ void PPU_UpdateEnabledBGs()
 
 
 void PPU_WriteReg16(u32 data);
+void PPU_HandleModeChange(u32 data);
 
 
 void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 {
 	s16 vcount = PPU_VCount + 1 - PPU_YOffset;
 	u16 ds_vcount = *(vu16*)0x04000006;
+	int maxchanges;
 	
 	// if the change occured during the vblank, schedule it for the DS vblank
 	// if it occured in a hidden scanline, apply it now
@@ -517,10 +517,13 @@ void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 		vcount = 192;
 	}
 	
+	maxchanges = (vcount == 192) ? (MAX_LINE_CHANGES * 2) : MAX_LINE_CHANGES;
+	
 	if (vcount == 192 && PPU_VBlankChangesDirty)
 	{
 		PPU_VBlankChangesDirty = 0;
 		PPU_NumLineChanges[192] = 0;
+		//iprintf("reset vbl changes due to lag\n");
 	}
 	
 	// if the change occured too late, apply it now, and 
@@ -548,9 +551,9 @@ void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 	
 	change->Action = action;
 	change->Data = data;
-	if (nchanges < (MAX_LINE_CHANGES-1))
+	if (nchanges < (maxchanges-1))
 		PPU_NumLineChanges[vcount]++;
-	else iprintf("!! PLC OVERFLOW %d %08X %08X\n", vcount, action, data);
+	else if (action==PPU_HandleModeChange) iprintf("!! PLC OVERFLOW %d %08X %08X\n", vcount, action, data);
 }
 
 void PPU_ResetLineChanges()
@@ -560,6 +563,7 @@ void PPU_ResetLineChanges()
 	for (i = 0; i < 192; i += 4)
 		*(u32*)&PPU_NumLineChanges[i] = 0;
 	PPU_NumLineChanges[192] = 0;
+	//iprintf("reset vbl changes\n");
 }
 
 inline void PPU_DoLineChanges(u32 line)
@@ -567,7 +571,7 @@ inline void PPU_DoLineChanges(u32 line)
 	int i;
 	register u8 limit = PPU_NumLineChanges[line];
 	register PPU_LineChange* change = &PPU_LineChanges[line][0];
-	
+	//if (line==192 && limit>0) iprintf("%d vbl changes \n", limit);
 	for (i = 0; i < limit; i++)
 	{
 		(*(change->Action))(change->Data);
@@ -954,7 +958,7 @@ void PPU_UploadBGScr(int nbg)
 {
 	PPU_Background* bg = &PPU_BG[nbg];
 	u8* tm2l = &PPU_Tilemap2Linear[0];
-	u16* hptiles = (u8*)&PPU_HighPrioTiles[nbg];
+	u16* hptiles = (u16*)&PPU_HighPrioTiles[nbg];
 	bool thinbg = !(bg->BGCnt & 0x4000);
 	
 	if (bg->ColorDepth == 0)
@@ -990,13 +994,13 @@ void PPU_UploadBGScr(int nbg)
 			if (palbase != 0xFF)
 				dtile |= ((stile & 0x1C00) << 2) | palbase;
 		}
-			
+
 		*dst++ = dtile;
-		
+
 		if ((t & 0xF) == 0xF)
 		{
 			hptiles[*tm2l] = hpt;
-			if (!(bg->BGCnt & 0x4000))
+			if (thinbg)
 				hptiles[(*tm2l) + 2] = hpt;
 			
 			tm2l++;
@@ -1070,8 +1074,10 @@ void PPU_SetupBG(int nbg, int depth, u16 mappaloffset)
 		switch (depth)
 		{
 			case 0: bg->ChrSize = 0; break;
-			case 4: bg->ChrSize = 0x4000; break;
-			case 16: bg->ChrSize = 0x8000; break;
+			case 4: 
+			case 5: bg->ChrSize = 0x4000; break;
+			case 16: 
+			case 17: bg->ChrSize = 0x8000; break;
 			case 256: bg->ChrSize = 0x10000; break;
 		}
 		
@@ -1140,7 +1146,7 @@ void PPU_ModeChange(u8 newmode)
 	
 	PPU_Mode = newmode;
 	PPU_LastNon7Mode = newmode;
-	
+	iprintf("PPU mode %d\n", newmode);
 	switch (newmode)
 	{
 		case 0:
@@ -1258,6 +1264,12 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 	
 	if (bg->ScrBase != oldscrbase || (bg->ScrSize >> 11) != oldsize)
 	{
+		bg->BGCnt &= 0xFFFF3FFF;
+		bg->BGCnt |= ((val & 0x03) << 14);
+		
+		if (PPU_ModeNow != 7)
+			*bg->BGCNT = bg->BGCnt;
+		
 		register int bmask = (1 << nbg), nbmask = ~bmask;
 		
 		int i, size = bg->ScrSize >> 11;
@@ -1270,12 +1282,6 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 		
 		PPU_UploadBGScr(nbg);
 	}
-	
-	bg->BGCnt &= 0xFFFF3FFF;
-	bg->BGCnt |= ((val & 0x03) << 14);
-	
-	if (PPU_ModeNow != 7)
-		*bg->BGCNT = bg->BGCnt;
 }
 
 inline void PPU_SetBGCHR(int nbg, u8 val)
@@ -1305,7 +1311,7 @@ inline void PPU_SetBGCHR(int nbg, u8 val)
 	}
 }
 
-inline void PPU_SetOBJCHR(u16 base, u16 gap)
+void PPU_SetOBJCHR(u16 base, u16 gap)
 {
 	if (base != PPU_OBJBase || gap != PPU_OBJGap)
 	{
@@ -1443,7 +1449,7 @@ void PPU_UpdateVRAM_SCR(int nbg, u32 addr, u16 oldtile, u16 stile)
 	PPU_Background* bg = &PPU_BG[nbg];
 	u16 dtile = stile & 0x03FF;
 	u16 paloffset = bg->MapPalOffset;
-	
+
 	if (bg->ColorDepth & 1) dtile >>= 1;
 	
 	u32 offset = addr - bg->ScrBase;
@@ -1624,19 +1630,6 @@ u8 PPU_Read8(u32 addr)
 	u8 ret = 0;
 	switch (addr)
 	{
-		case 0x21:
-			ret = PPU_CGRAMAddr;
-			break;
-		
-		case 0x22:
-			{
-				u8 val = *(u8*)(0x05000000 + (PPU_CGRAMAddr << 1) + PPU_CGRFlag);
-				if (PPU_CGRFlag) PPU_CGRAMAddr++;
-				PPU_CGRFlag = !PPU_CGRFlag;
-				ret = val;
-			}
-			break;
-			
 		case 0x34: ret = PPU_MulResult & 0xFF; break;
 		case 0x35: ret = (PPU_MulResult >> 8) & 0xFF; break;
 		case 0x36: ret = (PPU_MulResult >> 16) & 0xFF; break;
@@ -1661,6 +1654,13 @@ u8 PPU_Read8(u32 addr)
 				if (PPU_VRAMInc & 0x80)
 					PPU_VRAMAddr += PPU_VRAMStep;
 			}
+			break;
+			
+		case 0x3C:
+			iprintf("read OPHCT\n");
+			break;
+		case 0x3D:
+			iprintf("read OPVCT\n");
 			break;
 			
 		case 0x3E: ret = 0x01; break;
@@ -2028,7 +2028,7 @@ ITCM_CODE void PPU_VBlank()
 	{
 		//iprintf("VBlank [miss]\n");
 		PPU_MissedVBlank = true;
-		PPU_DoLineChanges(192);
+		//PPU_DoLineChanges(192);
 		return;
 	}
 	
@@ -2056,6 +2056,7 @@ ITCM_CODE void PPU_VBlank()
 		register u16* dst = (u16*)0x07000000;
 		register u8* priolist = &PPU_OBJPrioList[0];
 		register int nsprites = 0;
+		register u8* sprprio = &PPU_CurPrio[12];
 		
 		// insert faketile OBJs here
 		
@@ -2082,7 +2083,7 @@ ITCM_CODE void PPU_VBlank()
 			
 			*dst++ = attr0;
 			*dst++ = attr1;
-			*dst++ = PPU_OBJList[srcaddr++] | PPU_OBJPrio[prio];
+			*dst++ = PPU_OBJList[srcaddr++] | (sprprio[prio] << 10);
 			*dst++ = 0x0000;
 			
 			srcaddr++;

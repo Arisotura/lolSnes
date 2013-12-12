@@ -166,12 +166,15 @@ bool Mem_LoadROM(char* path)
 	Mem_SRAMMask &= 0x000FFFFF;
 	iprintf("SRAM size: %dKB\n", (Mem_SRAMMask+1) >> 10);
 	
-	strncpy(Mem_SRAMPath, path, strlen(path)-3);
-	strncpy(Mem_SRAMPath + strlen(path)-3, "srm", 3);
-	Mem_SRAMPath[strlen(path)] = '\0';
-	FILE* sram = fopen(Mem_SRAMPath, "r+");
-	if (!sram) sram = fopen(Mem_SRAMPath, "w+");
-	if (sram) fclose(sram);
+	if (Mem_SRAMMask)
+	{
+		strncpy(Mem_SRAMPath, path, strlen(path)-3);
+		strncpy(Mem_SRAMPath + strlen(path)-3, "srm", 3);
+		Mem_SRAMPath[strlen(path)] = '\0';
+		FILE* sram = fopen(Mem_SRAMPath, "r+");
+		if (!sram) sram = fopen(Mem_SRAMPath, "w+");
+		if (sram) fclose(sram);
+	}
 	
 	return true;
 }
@@ -185,17 +188,24 @@ void Mem_Reset()
 		
 	Mem_FastROM = false;
 
-	if (Mem_SRAM) free(Mem_SRAM);
-	Mem_SRAM = malloc(Mem_SRAMMask + 1);
-	for (i = 0; i <= Mem_SRAMMask; i += 4)
-		*(u32*)&Mem_SRAM[i] = 0;
-		
-	Mem_SRAMFile = fopen(Mem_SRAMPath, "r");
-	if (Mem_SRAMFile)
+	if (Mem_SRAM) 
 	{
-		fread(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
-		fclose(Mem_SRAMFile);
-		Mem_SRAMFile = NULL;
+		free(Mem_SRAM);
+		Mem_SRAM = NULL;
+	}
+	if (Mem_SRAMMask)
+	{
+		Mem_SRAM = malloc(Mem_SRAMMask + 1);
+		for (i = 0; i <= Mem_SRAMMask; i += 4)
+			*(u32*)&Mem_SRAM[i] = 0;
+		
+		Mem_SRAMFile = fopen(Mem_SRAMPath, "r");
+		if (Mem_SRAMFile)
+		{
+			fread(Mem_SRAM, Mem_SRAMMask+1, 1, Mem_SRAMFile);
+			fclose(Mem_SRAMFile);
+			Mem_SRAMFile = NULL;
+		}
 	}
 		
 	Mem_Status = &_Mem_PtrTable[0];
@@ -203,6 +213,7 @@ void Mem_Reset()
 	
 	Mem_Status->SRAMDirty = 0;
 	Mem_Status->HVBFlags = 0x00;
+	Mem_Status->SRAMMask = Mem_SRAMMask;
 	
 	for (b = 0; b < 0x40; b++)
 	{
@@ -210,7 +221,7 @@ void Mem_Reset()
 		MEM_PTR(b, 0x2000) = MEM_PTR(0x80 + b, 0x2000) = MPTR_SPECIAL;
 		MEM_PTR(b, 0x4000) = MEM_PTR(0x80 + b, 0x4000) = MPTR_SPECIAL;
 		
-		if (Mem_HiROM)
+		if ((b >= 0x30) && Mem_HiROM && Mem_SRAMMask)
 			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[(b << 13) & Mem_SRAMMask];
 		else
 			MEM_PTR(b, 0x6000) = MEM_PTR(0x80 + b, 0x6000) = MPTR_SLOW | MPTR_SPECIAL;
@@ -244,9 +255,28 @@ void Mem_Reset()
 			for (a = 0; a < 0x10000; a += 0x2000)
 				MEM_PTR(0x40 + b, a) = MEM_PTR(0xC0 + b, a) = MPTR_SLOW | MPTR_SPECIAL | MPTR_READONLY | (ROM_BaseOffset + 0x200000 + (b << 15) + (a & 0x7FFF));
 
-		for (b = 0; b < 0x0E; b++)
+		if (Mem_SRAMMask)
+		{
+			for (b = 0; b < 0x0E; b++)
+				for (a = 0; a < 0x8000; a += 0x2000)
+					MEM_PTR(0x70 + b, a) = MEM_PTR(0xF0 + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((b << 15) + a) & Mem_SRAMMask];
 			for (a = 0; a < 0x8000; a += 0x2000)
-				MEM_PTR(0x70 + b, a) = MEM_PTR(0xF0 + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((b << 15) + a) & Mem_SRAMMask];
+			{
+				MEM_PTR(0xFE + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((0xE << 15) + a) & Mem_SRAMMask];
+				MEM_PTR(0xFF + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((0xF << 15) + a) & Mem_SRAMMask];
+			}
+		}
+		else
+		{
+			for (b = 0; b < 0x0E; b++)
+				for (a = 0; a < 0x8000; a += 0x2000)
+					MEM_PTR(0x70 + b, a) = MEM_PTR(0xF0 + b, a) = MPTR_SLOW | MPTR_SPECIAL;
+			for (a = 0; a < 0x8000; a += 0x2000)
+			{
+				MEM_PTR(0xFE + b, a) = MPTR_SLOW | MPTR_SPECIAL;
+				MEM_PTR(0xFF + b, a) = MPTR_SLOW | MPTR_SPECIAL;
+			}
+		}
 
 		for (b = 0; b < 0x02; b++)
 			for (a = 0; a < 0x10000; a += 0x2000)
@@ -279,6 +309,9 @@ void Mem_Reset()
 
 void Mem_SaveSRAM()
 {
+	if (!Mem_SRAMMask) 
+		return;
+	
 	if (!Mem_Status->SRAMDirty)
 		return;
 	

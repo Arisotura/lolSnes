@@ -1,5 +1,7 @@
 lolSnes
 
+http://lolsnes.net/
+
 A SNES emulator for the DS. My goal is to make rendering the most accurate possible, we'll see how far I can get.
 
 ** EmuCR please stop copypasting this every time you post a lolSnes build. It is almost always outdated. Either 
@@ -18,13 +20,21 @@ What is currently supported
 * DSP -- ~80% (code taken from SNemulDS. Emulates BRR sound with envelopes. Seems to lack noise and echo.)
 * DMA -- 50% (HDMA not supported yet, and DMA method is inefficient)
 * Support for large ROMs via intelligent ROM cache system
-* Regular joypad
+* Regular joypad for player 1
 * Linear audio interpolation (the SNES does Gaussian interpolation, but the DS isn't powerful enough)
+* SRAM with auto-saving
 
 What is NOT supported
 
 * Expansion chips
 * Multiplayer
+
+What will never be emulated correctly
+(hacks could be developed for most common cases, though)
+
+* Color subtract -- DS hardware has no such feature
+* Offset per tile -- same as above
+* Per-tile priority -- layer priority is changed per-scanline based on gross approximation, though
 
 
 100% accurate graphics emulation is impossible, but we'll do our best.

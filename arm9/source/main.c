@@ -263,6 +263,7 @@ int main(void)
 	makeMenu();
 
 	iprintf("lolSnes " VERSION " -- by Mega-Mario\n");
+	iprintf("http://lolsnes.net/\n");
 	
 	for (;;)
 	{

@@ -176,7 +176,7 @@ void ROM_MapBankToRAM(u32 bank, u8* ptr)
 		}
 	}
 	
-	ROM_ApplySpeedHacks(bank, ptr);
+	ROM_ApplySpeedHacks(bank, ptr); // breaks shit!!!
 	
 	REG_IME = old_ime;
 }
@@ -265,6 +265,22 @@ void ROM_CacheBank(u32 bank, u32 type)
 	if (Mem_HiROM && bank < 0x40) bank += 0x40;
 	
 	//iprintf("cache bank %02X %02X %02X\n", bank, type, ROM_BankStatus[bank]);
+	/*int i;
+	for (i = 0; i < 400; i++)
+	{
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");
+	asm("nop");}*/
+	//*(vu32*)0x040000EC = *(vu16*)0x04000006;
 	
 	// the first half of the chunks will alawys be used for resident banks
 	u32 firstchunk = (type == 0xFF) ? 0 : (ROM_NumChunks >> 1);

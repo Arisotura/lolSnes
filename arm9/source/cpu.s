@@ -742,6 +742,7 @@ frameloop:
 		mov r0, #0
 		ldr r1, =PPU_VCount
 		strh r0, [r1]
+		bl DMA_ReloadHDMA
 		b emuloop
 		
 newline:
@@ -756,46 +757,90 @@ newline:
 			add r0, r0, #1
 			strh r0, [r1]
 			
-			ldr r0, =(flagI|flagIV)
-			tst snesP, r0
-			bne no_virq
-			ldr r0, =Mem_VMatch
-			ldrh r0, [r0]
-			sub r0, r0, snesCycles
-			movs r0, r0, lsl #0x10
-			bleq CPU_TriggerIRQ
+			@ldr r0, =(flagI|flagIV)
+			@tst snesP, r0
+			@bne no_virq
+			@ldr r0, =Mem_VMatch
+			@ldrh r0, [r0]
+			@sub r0, r0, snesCycles
+			@movs r0, r0, lsl #0x10
+			@bleq CPU_TriggerIRQ
 			
 no_virq:
-			tst snesP, #flagW
-			bne emulate_hardware
+			@tst snesP, #flagW
+			@bne emulate_hardware
 			
 emuloop:
+				ldrh r0, [memoryMap, #-0x6] @ IRQ cond in lower bits, flags in higher bits
+				mov r3, snesCycles, asr #0x10
+				tst r0, #0x4000				@ check if we gotta handle the HBlank
+				bne hblank_end
+				cmp r3, #0x10C
+				bgt hblank_end
+				orr r0, r0, #0x4000
+				strh r0, [memoryMap, #-0x6] @ fixme: weird graphics in SMW (bad BGCNT values)
+				@SafeCall_03 DMA_DoHDMA
+				
+hblank_end:
+				tst r0, #0x0800				@ check if we already triggered an IRQ in this scanline
+				bne irq_end
+				tst snesP, #flagI
+				bne irq_end
+				
+				and r0, r0, #0x0003
+				ldr pc, [pc, r0, lsl #0x2]
+				nop
+				.long irq_end
+				.long irq_h
+				.long irq_v
+				.long irq_hv
+				
+irq_h:
+				ldr r0, =Mem_HMatch
+				ldrh r0, [r0]
+				cmp r3, r0					@ r3 = cycle count
+				ble irq_trigger
+				b irq_end
+				
+irq_v:
+				ldr r0, =Mem_VMatch
+				ldrh r0, [r0]
+				ldr r1, =PPU_VCount
+				ldrh r1, [r1]
+				cmp r0, r1
+				beq irq_trigger
+				b irq_end
+
+irq_hv:
+				ldr r0, =Mem_VMatch
+				ldrh r0, [r0]
+				ldr r1, =PPU_VCount
+				ldrh r1, [r1]
+				cmp r0, r1
+				bne irq_end
+				ldr r0, =Mem_HMatch
+				ldrh r0, [r0]
+				cmp r3, r0					@ r3 = cycle count
+				bgt irq_end
+				
+irq_trigger:
+				ldrb r0, [memoryMap, #-0x5]
+				orr r0, r0, #0x08
+				strb r0, [memoryMap, #-0x5]
+				bl CPU_TriggerIRQ
+				
+irq_end:
 				OpcodePrefetch8
 				ldr pc, [opTable, r0, lsl #0x2]
 op_return:
-@ldr r0, =(PPU_VRAM+0x4C)
-@ldr r0, [r0]
-@ldr r1, =0x0AFD23F4
-@cmp r1, r0
-@yu:
-@beq yu
-@ 6 nops or more make it work
-@nop
-
-				@ <= 1360 (550): HBlank end
-				@ <= 268 (10C): HBlank start
-				@ (who cares if the HBlank end is one pixel off)
-				cmp snesCycles, #0x10C0000
-				ldrb r1, [memoryMap, #-0x5]
-				orrle r1, r1, #0x40
-				bicgt r1, r1, #0x40
-				strb r1, [memoryMap, #-0x5]
 				
 				cmp snesCycles, #0x00010000
 				bge emuloop
 				
 emulate_hardware:
 			ldrb r2, [memoryMap, #-0x5]
+			bic r2, r2, #0x48				@ clear HBlank and per-scanline IRQ flags
+			strb r2, [memoryMap, #-0x5]
 			mov r1, snesCycles, lsl #0x10
 			
 			cmp r1, #0xE00000

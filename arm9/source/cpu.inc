@@ -53,6 +53,20 @@ memoryMap		.req r4		@ pointer to the memory map table
 .equ flagNZC,  0x83
 .equ flagNVZ,  0xC2
 
+@ --- Handy macros ------------------------------------------------------------
+
+.macro SafeCall func
+	stmdb sp!, {r12}
+	bl \func
+	ldmia sp!, {r12}
+.endm
+
+.macro SafeCall_03 func
+	stmdb sp!, {r0, r3, r12}
+	bl \func
+	ldmia sp!, {r0, r3, r12}
+.endm
+
 @ --- Debugging ---------------------------------------------------------------
 
 .macro DbgPrint

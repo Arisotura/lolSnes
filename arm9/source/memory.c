@@ -67,6 +67,7 @@ IPCStruct* IPC;
 
 u8 Mem_HVBJOY = 0x00;
 u16 Mem_VMatch = 0;
+u16 Mem_HMatchRaw = 0, Mem_HMatch = 0;
 
 u8 Mem_MulA = 0;
 u16 Mem_MulRes = 0;
@@ -74,6 +75,8 @@ u16 Mem_DivA = 0;
 u16 Mem_DivRes = 0;
 
 bool Mem_FastROM = false;
+
+extern u8 DMA_HDMAFlag;
 
 
 
@@ -187,6 +190,8 @@ void Mem_Reset()
 		*(u32*)&Mem_SysRAM[i] = 0x55555555; // idk about this
 		
 	Mem_FastROM = false;
+	
+	DMA_HDMAFlag = 0;
 
 	if (Mem_SRAM) 
 	{
@@ -214,6 +219,7 @@ void Mem_Reset()
 	Mem_Status->SRAMDirty = 0;
 	Mem_Status->HVBFlags = 0x00;
 	Mem_Status->SRAMMask = Mem_SRAMMask;
+	Mem_Status->IRQCond = 0;
 	
 	for (b = 0; b < 0x40; b++)
 	{
@@ -465,7 +471,8 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 	switch (addr)
 	{
 		case 0x00:
-			if (val & 0x10) iprintf("HCOUNT IRQ ENABLE: %02X\n", val);
+			// the NMI flag is handled in mem_io.s
+			Mem_Status->IRQCond = (val & 0x30) >> 4;
 			break;
 			
 		case 0x02:
@@ -499,6 +506,17 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			Mem_MulRes = *(volatile u16*)0x040002A8;
 			break;
 			
+		case 0x07:
+			Mem_HMatchRaw &= 0xFF00;
+			Mem_HMatchRaw |= val;
+			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
+			break;
+		case 0x08:
+			Mem_HMatchRaw &= 0x00FF;
+			Mem_HMatchRaw |= (val << 8);
+			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
+			break;
+			
 		case 0x09:
 			Mem_VMatch &= 0xFF00;
 			Mem_VMatch |= val;
@@ -512,7 +530,7 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			DMA_Enable(val);
 			break;
 		case 0x0C:
-			//iprintf("HDMA enable: %02X\n", val);
+			DMA_HDMAFlag = val;
 			break;
 			
 		case 0x0D:
@@ -546,13 +564,18 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 			Mem_DivA = val;
 			break;
 			
+		case 0x07:
+			Mem_HMatchRaw = val;
+			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
+			break;
+			
 		case 0x09:
 			Mem_VMatch = val;
 			break;
 			
 		case 0x0B:
 			DMA_Enable(val & 0xFF);
-			// TODO HDMA
+			DMA_HDMAFlag = val >> 8;
 			break;
 			
 		default:

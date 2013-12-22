@@ -30,8 +30,16 @@ typedef struct
 {
 	u32 SRAMMask;	// -0xC
 	
-	u8 __pad0[3];	// -0x8
-	u8 HVBFlags;	// -0x5 | bit7: vblank | bit6: hblank | bit5: vblank (ack) | bit4: IRQ (ack)
+	u8 __pad0[2];	// -0x8
+	
+	u8 IRQCond;		// -0x6
+	
+	// bit7: vblank
+	// bit6: hblank
+	// bit5: vblank (ack)
+	// bit4: IRQ (ack)
+	// bit3: IRQ (sticky, per-scanline)
+	u8 HVBFlags;	// -0x5
 	
 	u32 SRAMDirty;	// -0x4
 	
@@ -63,6 +71,7 @@ extern u32* Mem_PtrTable;
 extern u8 Mem_SysRAM[0x20000];
 
 extern u16 Mem_VMatch;
+extern u16 Mem_HMatch;
 
 
 void ROM_DoCacheBank(u32 bank, u32 type);

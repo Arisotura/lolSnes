@@ -5,12 +5,13 @@
 typedef struct
 {
 	// SPC700 IO
-	u8 SPC_IOPorts[8];
+	volatile u8 SPC_IOPorts[8];
 	
-	u8 Input_XY;
+	volatile u8 Input_XY;
+	volatile u8 Pause;
 	
 	// debug section
-	char Dbg_String[256];
+	volatile char Dbg_String[256];
 	
 } IPCStruct;
 

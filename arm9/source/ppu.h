@@ -21,6 +21,8 @@
 
 void PPU_Reset();
 
+ITCM_CODE void PPU_SNESVBlank();
+
 ITCM_CODE void PPU_VBlank();
 ITCM_CODE void PPU_HBlank();
 

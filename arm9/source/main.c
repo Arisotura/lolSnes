@@ -70,21 +70,21 @@ void arm7print(u32 value32, void* userdata)
 }
 
 
-void sleepMode(u32 value32, void* userdata)
-{iprintf("sleep mode engaged\n");for(;;);
-	fifoSendValue32(FIFO_USER_03, 1);
-	
+void sleepMode()
+{
 	// turn shit off
+	IPC->Pause |= 1;
+	
 	u32 powerstate = *(vu32*)0x04000304;
 	*(vu32*)0x04000304 = (powerstate & 0x8001);
 	
-	swiIntrWait(1, IRQ_FIFO_NOT_EMPTY);
-	iprintf("done sleeping\n");
+	while (IPC->Pause & 2);
+	
 	// turn shit back on
 	*(vu32*)0x04000304 = powerstate;
 	
-	fifoSendValue32(FIFO_USER_03, 1);
-	while (!fifoCheckValue32(FIFO_USER_03));
+	IPC->Pause &= ~1;
+	while (*(vu16*)0x04000006 != 192);
 }
 
 
@@ -157,6 +157,9 @@ u16 keypress = 0x03FF;
 
 ITCM_CODE void vblank()
 {
+	if (IPC->Pause & 2)
+		sleepMode();
+		
 	PPU_VBlank();
 	
 	// every 8 frames, check if SRAM needs to be saved
@@ -247,7 +250,6 @@ int main(void)
 	irqSet(IRQ_VBLANK, vblank_idle);
 	
 	fifoSetValue32Handler(FIFO_USER_02, arm7print, NULL);
-	fifoSetValue32Handler(FIFO_USER_03, sleepMode, NULL);
 	
 	//vramSetBankA(VRAM_A_LCD);
 	videoSetMode(MODE_0_2D);

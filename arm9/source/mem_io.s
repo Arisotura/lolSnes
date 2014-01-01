@@ -23,9 +23,6 @@
 
 .section    .itcm, "aw", %progbits
 
-write16msg:
-	.ascii "IOWrite16 %06X %04X\n\0"
-
 .align 4
 .global Mem_IORead8
 .global Mem_IORead16
@@ -92,10 +89,7 @@ Mem_IOWrite8:
 	bne Mem_GIOWrite8
 	tst r1, #0x80
 	bicne snesP, snesP, #flagI2
-	orreq snesP, snesP, #flagI2
-	tst r1, #0x20
-	bicne snesP, snesP, #flagIV
-	orreq snesP, snesP, #flagIV
+	orreq snesP, snesP, #flagI2	
 	b Mem_GIOWrite8
 	
 Mem_IOWrite16:
@@ -109,7 +103,7 @@ Mem_IOWrite16:
 	beq DMA_Write16
 	
 	cmp r2, #0x4000
-	subeq snesCycles, snesCycles, #0x60000
+	subeq snesCycles, snesCycles, #0xC0000
 	beq Mem_JoyWrite16
 	
 	cmp r2, #0x4200
@@ -119,7 +113,4 @@ Mem_IOWrite16:
 	tst r1, #0x80
 	bicne snesP, snesP, #flagI2
 	orreq snesP, snesP, #flagI2
-	tst r1, #0x20
-	bicne snesP, snesP, #flagIV
-	orreq snesP, snesP, #flagIV
 	b Mem_GIOWrite16

@@ -72,6 +72,7 @@ extern u8 Mem_SysRAM[0x20000];
 
 extern u16 Mem_VMatch;
 extern u16 Mem_HMatch;
+extern u16 Mem_HCheck;
 
 
 void ROM_DoCacheBank(u32 bank, u32 type);

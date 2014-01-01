@@ -306,8 +306,6 @@ void DMA_DoHDMA()
 				{
 					memaddr = chan[5] | (chan[6] << 8);
 					membank = chan[7] << 16;
-					
-					tableaddr += 2;
 				}
 				else
 				{

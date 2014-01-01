@@ -68,6 +68,7 @@ IPCStruct* IPC;
 u8 Mem_HVBJOY = 0x00;
 u16 Mem_VMatch = 0;
 u16 Mem_HMatchRaw = 0, Mem_HMatch = 0;
+u16 Mem_HCheck = 0;
 
 u8 Mem_MulA = 0;
 u16 Mem_MulRes = 0;
@@ -298,6 +299,7 @@ void Mem_Reset()
 	IPC = memalign(32, ipcsize);
 	DC_InvalidateRange(IPC, ipcsize);
 	IPC = memUncached(IPC);
+	IPC->Pause = 0;
 	iprintf("IPC struct = %08X\n", IPC);
 	fifoSendValue32(FIFO_USER_01, 3);
 	fifoSendAddress(FIFO_USER_01, memCached(IPC));
@@ -473,18 +475,15 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 		case 0x00:
 			// the NMI flag is handled in mem_io.s
 			Mem_Status->IRQCond = (val & 0x30) >> 4;
+			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
 			break;
 			
 		case 0x02:
 			Mem_MulA = val;
-			//if (val) iprintf("4202 = %02X | %02X @ %06X\n", val, Mem_SysRAM[0x7A5], *(vu32*)0x040000EC);
 			break;
 		case 0x03:
 			Mem_MulRes = (u16)Mem_MulA * (u16)val;
 			Mem_DivRes = (u16)val;
-			//if (val == 5) Mem_MulRes = 0x50; // makes Super Metroid work
-			//if (Mem_MulRes)
-			//	iprintf("mul. %d x %d = %d (%04X) %02X %08X\n", Mem_MulA, val, Mem_MulRes, Mem_MulRes, Mem_SysRAM[0x7A5], *(vu32*)0x040000EC);
 			break;
 			
 		case 0x04:
@@ -510,11 +509,13 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			Mem_HMatchRaw &= 0xFF00;
 			Mem_HMatchRaw |= val;
 			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
+			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
 			break;
 		case 0x08:
 			Mem_HMatchRaw &= 0x00FF;
 			Mem_HMatchRaw |= (val << 8);
 			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
+			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
 			break;
 			
 		case 0x09:
@@ -567,6 +568,7 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 		case 0x07:
 			Mem_HMatchRaw = val;
 			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
+			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
 			break;
 			
 		case 0x09:

@@ -20,8 +20,6 @@
 
 @ --- TODO --------------------------------------------------------------------
 @
-@ H/V match IRQ
-@
 @ (low priority-- aka who cares)
 @ * for some addressing modes using X/Y, add 1 cycle if adding X/Y crosses page boundary
 @ * accessing I/O registers from 0x4000 to 0x4200 should take 12 cycles
@@ -616,7 +614,7 @@ CPU_Reset:
 	mov snesY, #0
 	ldr snesS, =0x01FF0000	@ also PBR
 	mov snesD, #0			@ also DBR
-	ldr snesP, =0x00000D34	@ we'll do PC later
+	ldr snesP, =0x00000534	@ we'll do PC later
 	
 	ldr memoryMap, =Mem_PtrTable
 	ldr memoryMap, [memoryMap]
@@ -638,9 +636,6 @@ CPU_Reset:
 	bx lr
 	
 CPU_TriggerIRQ:
-	ldrb r3, [memoryMap, #-0x5]
-	orr r3, r3, #0x10
-	strb r3, [memoryMap, #-0x5]
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	mov r2, snesS, lsl #0x3
@@ -672,7 +667,7 @@ irq_nostack:
 	subne r0, r0, #vec_e1_IRQ
 	ldrh r0, [r0]
 	SetPC
-	bx lr
+	b irq_end
 	
 CPU_TriggerNMI:
 	bic r3, snesS, #0x18000000
@@ -746,40 +741,22 @@ frameloop:
 		b emuloop
 		
 newline:
-			@ if in wait mode, jump right to the next line
-			tst snesP, #flagW
-			movne r0, #0x00000001
-			ldreq r0, =0x05540001
+			ldr r0, =0x05540001
 			add snesCycles, snesCycles, r0
 			
-			ldr r1, =PPU_VCount
-			ldrh r0, [r1]
-			add r0, r0, #1
-			strh r0, [r1]
-			
-			@ldr r0, =(flagI|flagIV)
-			@tst snesP, r0
-			@bne no_virq
-			@ldr r0, =Mem_VMatch
-			@ldrh r0, [r0]
-			@sub r0, r0, snesCycles
-			@movs r0, r0, lsl #0x10
-			@bleq CPU_TriggerIRQ
-			
-no_virq:
-			@tst snesP, #flagW
-			@bne emulate_hardware
+			ldr r0, =PPU_VCount
+			strh snesCycles, [r0]
 			
 emuloop:
-				ldrh r0, [memoryMap, #-0x6] @ IRQ cond in lower bits, flags in higher bits
 				mov r3, snesCycles, asr #0x10
+				ldrh r0, [memoryMap, #-0x6] @ IRQ cond in lower bits, flags in higher bits
 				tst r0, #0x4000				@ check if we gotta handle the HBlank
 				bne hblank_end
 				cmp r3, #0x10C
 				bgt hblank_end
 				orr r0, r0, #0x4000
-				strh r0, [memoryMap, #-0x6] @ fixme: weird graphics in SMW (bad BGCNT values)
-				@SafeCall_03 DMA_DoHDMA
+				strh r0, [memoryMap, #-0x6]
+				SafeCall_03 DMA_DoHDMA
 				
 hblank_end:
 				tst r0, #0x0800				@ check if we already triggered an IRQ in this scanline
@@ -809,6 +786,10 @@ irq_v:
 				ldrh r1, [r1]
 				cmp r0, r1
 				beq irq_trigger
+				@ if this isn't the right scanline, set the flag so we don't bother checking again
+				ldrb r0, [memoryMap, #-0x5]
+				orr r0, r0, #0x08
+				strb r0, [memoryMap, #-0x5]
 				b irq_end
 
 irq_hv:
@@ -817,6 +798,9 @@ irq_hv:
 				ldr r1, =PPU_VCount
 				ldrh r1, [r1]
 				cmp r0, r1
+				ldrneb r0, [memoryMap, #-0x5]
+				orrne r0, r0, #0x08
+				strneb r0, [memoryMap, #-0x5]
 				bne irq_end
 				ldr r0, =Mem_HMatch
 				ldrh r0, [r0]
@@ -825,11 +809,14 @@ irq_hv:
 				
 irq_trigger:
 				ldrb r0, [memoryMap, #-0x5]
-				orr r0, r0, #0x08
+				orr r0, r0, #0x18
 				strb r0, [memoryMap, #-0x5]
-				bl CPU_TriggerIRQ
+				b CPU_TriggerIRQ
 				
 irq_end:
+				tst snesP, #flagW
+				subne snesPC, snesPC, #0x10000
+				
 				OpcodePrefetch8
 				ldr pc, [opTable, r0, lsl #0x2]
 op_return:
@@ -853,13 +840,20 @@ emulate_hardware:
 			b newline
 			
 vblank:
-			tsteq snesP, #flagI2
+			bne vblank_notfirst
+			SafeCall PPU_SNESVBlank
+			tst snesP, #flagI2
 			beq CPU_TriggerNMI
+			
+vblank_notfirst:
 			mov r3, #0x83
 			cmp r1, r3, lsl #0x11
 			blt newline
 			
 		sub snesCycles, snesCycles, r3, lsl #0x1
+		ldr r0, =262
+		ldr r1, =PPU_VCount
+		strh r0, [r1]
 		
 		@ causes glitches when running < 60fps
 		@ (vblank handler should be called directly if no vblank, but then
@@ -876,6 +870,21 @@ vblank:
 		b frameloop
 		
 .ltorg
+
+
+.macro EatCycles
+	cmp snesCycles, #0x00010000
+	blt 1f
+	mov r3, snesCycles, asr #0x10
+	ldr r0, =Mem_HMatch
+	ldrh r0, [r0]
+	cmp r3, r0
+	eor snesCycles, snesCycles, r3, lsl #0x10
+	movgt r3, r0
+	movle r3, #1
+	orr snesCycles, snesCycles, r3, lsl #0x10
+1:
+.endm
 	
 @ --- Addressing modes --------------------------------------------------------
 @ TODO: indexed addressing modes must add one cycle if adding index crosses a
@@ -1706,9 +1715,9 @@ OP_e0_BRK:
 	and r0, snesP, #0xFF
 	StackWrite8
 	
-	mov r0, snesPC, lsr #0x10
-	orr r0, r0, snesPBR, lsl #0x10
-	bl reportBRK
+	@mov r0, snesPC, lsr #0x10
+	@orr r0, r0, snesPBR, lsl #0x10
+	@bl reportBRK
 	
 	bic snesP, snesP, #flagD
 	orr snesP, snesP, #flagI
@@ -4463,9 +4472,8 @@ OP_TYX:
 
 OP_WAI:
 	orr snesP, snesP, #flagW
-	mov snesCycles, snesCycles, lsl #0x10
-	mov snesCycles, snesCycles, lsr #0x10
-	b emulate_hardware
+	EatCycles
+	b op_return
 	
 @ --- XBA ---------------------------------------------------------------------
 
@@ -4511,14 +4519,8 @@ OP_e1_XCE:
 @
 @ -----------------------------------------------------------------------------
 
-hax_branch:
-	add snesPC, snesPC, r0, lsl #0x10
-	b emulate_hardware
-	
-
 OP_HAX42:
-	mov snesCycles, snesCycles, lsl #0x10
-	mov snesCycles, snesCycles, lsr #0x10
+	EatCycles
 	ldrb r0, [r2, #1]
 	add snesPC, snesPC, #0x10000
 	and r1, r0, #0xE0
@@ -4527,33 +4529,33 @@ OP_HAX42:
 	add pc, pc, r1, lsr #1
 	nop
 	tst snesP, #flagN
-	beq hax_branch
-	b emulate_hardware
+	addeq snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagN
-	bne hax_branch
-	b emulate_hardware
+	addne snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagV
-	beq hax_branch
-	b emulate_hardware
+	addeq snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagV
-	bne hax_branch
-	b emulate_hardware
+	addne snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagC
-	beq hax_branch
-	b emulate_hardware
+	addeq snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagC
-	bne hax_branch
-	b emulate_hardware
+	addne snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagZ
-	beq hax_branch
-	b emulate_hardware
+	addeq snesPC, snesPC, r0, lsl #0x10
+	b op_return
 	nop
 	tst snesP, #flagZ
-	bne hax_branch
-	b emulate_hardware
+	addne snesPC, snesPC, r0, lsl #0x10
+	b op_return

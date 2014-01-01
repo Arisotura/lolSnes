@@ -176,7 +176,7 @@ void ROM_MapBankToRAM(u32 bank, u8* ptr)
 		}
 	}
 	
-	ROM_ApplySpeedHacks(bank, ptr); // breaks shit!!!
+	ROM_ApplySpeedHacks(bank, ptr);
 	
 	REG_IME = old_ime;
 }

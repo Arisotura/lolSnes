@@ -26,6 +26,36 @@
 IPCStruct* IPC = 0;
 
 
+void sleepMode()
+{
+	// turn shit off
+	u32 oldIE = REG_IE;
+	REG_IE = (1<<22);
+	
+	IPC->Pause |= 2;
+	while (!(IPC->Pause & 1));
+	
+	u32 powerstate = readPowerManagement(PM_CONTROL_REG);
+	writePowerManagement(PM_CONTROL_REG, 0x12);
+
+	u32 powerstate2 = *(vu32*)0x04000304;
+	*(vu32*)0x04000304 = 0;
+
+	swiSleep();
+	IPC->Pause &= ~2;
+
+	// turn shit back on
+	writePowerManagement(PM_CONTROL_REG, powerstate);
+
+	*(vu32*)0x04000304 = powerstate2;
+	swiDelay(125678);
+	
+	while (IPC->Pause & 1);
+	while (*(vu16*)0x04000006 != 192);
+	
+	REG_IE = oldIE;
+}
+
 void vblank()
 {
 	if (!IPC) return;
@@ -34,30 +64,7 @@ void vblank()
 	IPC->Input_XY = extkeyin;
 	
 	if (extkeyin & 0x80)
-	{
-		// tell the ARM9 we're going to sleep, wait till it's ready
-		fifoSendValue32(FIFO_USER_03, 1);for(;;);
-		while (!fifoCheckValue32(FIFO_USER_03));
-		
-		// turn shit off
-		u32 powerstate = readPowerManagement(PM_CONTROL_REG);
-		writePowerManagement(PM_CONTROL_REG, 0x12);
-		
-		u32 powerstate2 = *(vu32*)0x04000304;
-		*(vu32*)0x04000304 = 0;
-		
-		swiSleep();
-		
-		// turn shit back on
-		writePowerManagement(PM_CONTROL_REG, powerstate);
-		
-		*(vu32*)0x04000304 = powerstate2;
-		swiDelay(125678);
-		
-		// wait for the ARM9
-		while (!fifoCheckValue32(FIFO_USER_03));
-		fifoSendValue32(FIFO_USER_03, 1);
-	}
+		sleepMode();
 }
 
 u32 cursample = 0;

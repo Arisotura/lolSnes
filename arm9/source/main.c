@@ -205,7 +205,7 @@ void menuPrint(int x, int y, char* str)
 
 void makeMenu()
 {
-	menuPrint(0, 0, "- lolSnes " VERSION " - by Mega-Mario -");
+	menuPrint(0, 0, "- lolSnes " VERSION " -                ");
 	menuPrint(0, 1, "________________________________");
 	
 	int i;
@@ -294,8 +294,8 @@ int main(void)
 	
 	makeMenu();
 
-	iprintf("lolSnes " VERSION " -- by Mega-Mario\n");
-	iprintf("http://lolsnes.net/\n");
+	iprintf("lolSnes " VERSION ", by StapleButter\n");
+	iprintf("Improved by RocketRobz\n");
 	
 	for (;;)
 	{

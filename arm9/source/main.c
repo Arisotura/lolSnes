@@ -103,7 +103,7 @@ bool isGoodFile(struct dirent* entry)
 
 void makeROMList()
 {
-	DIR* romdir = opendir("snes");
+	DIR* romdir = opendir("/roms/snes/");
 	int i = 0;
 	if (romdir)
 	{
@@ -317,8 +317,8 @@ int main(void)
 			}
 			else if ((keypress & 0x0003) != 0x0003) // A/B
 			{
-				strncpy(fullpath, "snes/", 5);
-				strncpy(fullpath + 5, &filelist[menusel << 8], 256);
+				strncpy(fullpath, "/roms/snes/", 11);
+				strncpy(fullpath + 11, &filelist[menusel << 8], 256);
 				
 				if (!Mem_LoadROM(fullpath))
 				{

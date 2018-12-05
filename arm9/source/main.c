@@ -70,9 +70,16 @@ void arm7print(u32 value32, void* userdata)
 }
 
 
+void stop() {
+	while (1) {
+		swiWaitForVBlank();
+	}
+}
+
+
 void sleepMode()
 {
-	// turn shit off
+	// turn off
 	IPC->Pause |= 1;
 	
 	u32 powerstate = *(vu32*)0x04000304;
@@ -80,7 +87,7 @@ void sleepMode()
 	
 	while (IPC->Pause & 2);
 	
-	// turn shit back on
+	// turn back on
 	*(vu32*)0x04000304 = powerstate;
 	
 	IPC->Pause &= ~1;
@@ -238,7 +245,7 @@ void makeMenu()
 
 char fullpath[270];
 
-int main(void)
+int main(int argc, char* argv[])
 {
 	int i;
 	
@@ -297,7 +304,32 @@ int main(void)
 	iprintf("lolSnes " VERSION ", by StapleButter\n");
 	iprintf("Improved by RocketRobz\n");
 	
-	for (;;)
+	if (argc >= 2) {
+        char* filename = argv[1];
+
+		if (!Mem_LoadROM(filename))
+		{
+			iprintf("ROM loading failed\n");
+			stop();
+		}
+
+		*(vu16*)0x04001000 &= 0xDFFF;
+		toggleConsole(true);
+		iprintf("ROM loaded, running\n");
+
+		CPU_Reset();
+		fifoSendValue32(FIFO_USER_01, 1);
+
+		swiWaitForVBlank();
+		fifoSendValue32(FIFO_USER_01, 2);
+
+		irqSet(IRQ_VBLANK, vblank);
+		irqSet(IRQ_HBLANK, PPU_HBlank);
+
+		swiWaitForVBlank();
+		CPU_Run();
+    }
+    else for (;;)
 	{
 		if (keypress != 0x03FF)
 		{

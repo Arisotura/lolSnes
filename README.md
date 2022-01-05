@@ -1,6 +1,6 @@
 lolSnes
 
-http://lolsnes.net/
+http://lolsnes.kuribo64.net/
 
 A SNES emulator for the DS. My goal is to make rendering the most accurate possible, we'll see how far I can get.
 

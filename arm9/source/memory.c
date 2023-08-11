@@ -269,8 +269,8 @@ void Mem_Reset()
 					MEM_PTR(0x70 + b, a) = MEM_PTR(0xF0 + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((b << 15) + a) & Mem_SRAMMask];
 			for (a = 0; a < 0x8000; a += 0x2000)
 			{
-				MEM_PTR(0xFE + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((0xE << 15) + a) & Mem_SRAMMask];
-				MEM_PTR(0xFF + b, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((0xF << 15) + a) & Mem_SRAMMask];
+				MEM_PTR(0xFE, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((0xE << 15) + a) & Mem_SRAMMask];
+				MEM_PTR(0xFF, a) = MPTR_SLOW | MPTR_SRAM | (u32)&Mem_SRAM[((0xF << 15) + a) & Mem_SRAMMask];
 			}
 		}
 		else
@@ -280,8 +280,8 @@ void Mem_Reset()
 					MEM_PTR(0x70 + b, a) = MEM_PTR(0xF0 + b, a) = MPTR_SLOW | MPTR_SPECIAL;
 			for (a = 0; a < 0x8000; a += 0x2000)
 			{
-				MEM_PTR(0xFE + b, a) = MPTR_SLOW | MPTR_SPECIAL;
-				MEM_PTR(0xFF + b, a) = MPTR_SLOW | MPTR_SPECIAL;
+				MEM_PTR(0xFE, a) = MPTR_SLOW | MPTR_SPECIAL;
+				MEM_PTR(0xFF, a) = MPTR_SLOW | MPTR_SPECIAL;
 			}
 		}
 

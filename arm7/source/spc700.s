@@ -86,7 +86,9 @@ SPC_UpdateMemMap:
 	.ifnc \addr, r0
 		mov r0, \addr
 	.endif
+	stmdb sp!, {r1-r2, r12}
 	bl SPC_IORead8
+	ldmia sp!, {r1-r2, r12}
 1:
 .endm
 
@@ -97,10 +99,14 @@ SPC_UpdateMemMap:
 	ldrneb r0, [r3]
 	ldrneb r3, [r3, #0x1]
 	orrne r0, r0, r3, lsl #0x8
+	bne 1f
 	.ifnc \addr, r0
-		moveq r0, \addr
+		mov r0, \addr
 	.endif
-	bleq SPC_IORead16
+	stmdb sp!, {r1-r2, r12}
+	bl SPC_IORead16
+	ldmia sp!, {r1-r2, r12}
+1:
 .endm
 
 .macro MemWrite8 addr=r0, val=r1
@@ -123,7 +129,9 @@ SPC_UpdateMemMap:
 	cmp r0, #0xF1
 	moveq r3, r1
 	bleq SPC_UpdateMemMap
+	stmdb sp!, {r1-r2, r12}
 	bl SPC_IOWrite8
+	ldmia sp!, {r1-r2, r12}
 2:
 .endm
 
@@ -155,7 +163,9 @@ SPC_UpdateMemMap:
 	moveq r3, r1
 	bleq SPC_UpdateMemMap
 3:
+	stmdb sp!, {r1-r2, r12}
 	bl SPC_IOWrite16
+	ldmia sp!, {r1-r2, r12}
 2:
 .endm
 
@@ -277,6 +287,22 @@ OpTableStart:
 	@sub\cond spcCycles, spcCycles, #\num
 	mov\cond r3, #\num
 .endm
+
+
+IRQ_Wait:
+	ldr r2, =0x0380FFF8
+	ldr r3, =0x04000301
+_irqloop:
+	ldr r1, [r2]
+	tst r1, r0
+	bicne r1, r0
+	strne r1, [r2]
+	bxne lr
+	mov r1, #0x80
+	strb r1, [r3]
+	b _irqloop
+	
+.pool
 
 
 .global itercount
@@ -403,9 +429,11 @@ noTimer1:
 		
 		@ wait for timer 0
 		@ (do not wait if we missed the IRQ)
-		mov r0, #0
-		mov r1, #0x00000008
-		swi #0x40000
+		@mov r0, #0
+		@mov r1, #0x00000008
+		@swi #0x40000
+		mov r0, #0x8
+		bl IRQ_Wait
 		
 		b frameloop
 		

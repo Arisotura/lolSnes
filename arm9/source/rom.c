@@ -334,13 +334,13 @@ void ROM_CacheBank(u32 bank, u32 type)
 		ROM_CurChunk = firstchunk;
 }
 
-void ROM_DoCacheBank(u32 bank, u32 type)
+/*void ROM_DoCacheBank(u32 bank, u32 type)
 {
 	asm("stmdb sp!, {r12}");
 	if (bank != 0x7E && bank != 0x7F)
 		ROM_CacheBank(bank, type);
 	asm("ldmia sp!, {r12}");
-}
+}*/
 
 
 void ROM_SpeedChanged()
@@ -445,8 +445,6 @@ void ROM_CacheMiss(u32 addr)
 // (slow) uncached ROM read
 ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 {
-	asm("stmdb sp!, {r1-r3, r12}");
-
 	if (fileaddr < ROM_FileSize)
 	{
 		if (fileaddr != ROM_FileOffset)
@@ -463,14 +461,11 @@ ITCM_CODE u8 Mem_ROMRead8(u32 fileaddr)
 	
 	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
 
-	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0xFF;
 }
 
 ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
 {
-	asm("stmdb sp!, {r1-r3, r12}");
-
 	if (fileaddr < ROM_FileSize)
 	{
 		if (fileaddr != ROM_FileOffset)
@@ -486,15 +481,12 @@ ITCM_CODE u16 Mem_ROMRead16(u32 fileaddr)
 		ROM_ReadBuffer = 0;
 	
 	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
-	
-	asm("ldmia sp!, {r1-r3, r12}");
+
 	return ROM_ReadBuffer & 0xFFFF;
 }
 
 ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
 {
-	asm("stmdb sp!, {r1-r3, r12}");
-
 	if (fileaddr < ROM_FileSize)
 	{
 		if (fileaddr != ROM_FileOffset)
@@ -511,6 +503,5 @@ ITCM_CODE u32 Mem_ROMRead24(u32 fileaddr)
 		
 	ROM_CacheMiss(fileaddr - ROM_BaseOffset);
 
-	asm("ldmia sp!, {r1-r3, r12}");
 	return ROM_ReadBuffer & 0x00FFFFFF;
 }

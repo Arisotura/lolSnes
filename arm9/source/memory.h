@@ -75,7 +75,8 @@ extern u16 Mem_HMatch;
 extern u16 Mem_HCheck;
 
 
-void ROM_DoCacheBank(u32 bank, u32 type);
+//void ROM_DoCacheBank(u32 bank, u32 type);
+void ROM_CacheBank(u32 bank, u32 type);
 void ROM_SpeedChanged();
 
 bool Mem_LoadROM(char* path);

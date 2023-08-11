@@ -1672,8 +1672,6 @@ void PPU_LatchHVCounters()
 
 u8 PPU_Read8(u32 addr)
 {
-	asm("stmdb sp!, {r2-r3, r12}");
-	
 	u8 ret = 0;
 	switch (addr)
 	{
@@ -1751,15 +1749,12 @@ u8 PPU_Read8(u32 addr)
 		
 		case 0x80: ret = Mem_SysRAM[Mem_WRAMAddr++]; break;
 	}
-	
-	asm("ldmia sp!, {r2-r3, r12}");
+
 	return ret;
 }
 
 u16 PPU_Read16(u32 addr)
 {
-	asm("stmdb sp!, {r2-r3, r12}");
-	
 	u16 ret = 0;
 	switch (addr)
 	{
@@ -1774,15 +1769,12 @@ u16 PPU_Read16(u32 addr)
 			ret |= (PPU_Read8(addr+1) << 8);
 			break;
 	}
-	
-	asm("ldmia sp!, {r2-r3, r12}");
+
 	return ret;
 }
 
 void PPU_Write8(u32 addr, u8 val)
 {
-	asm("stmdb sp!, {r2-r3, r12}");
-	
 	switch (addr)
 	{
 		case 0x00: // force blank/master brightness
@@ -2076,14 +2068,10 @@ void PPU_Write8(u32 addr, u8 val)
 			//iprintf("PPU_Write8(%08X, %08X)\n", addr, val);
 			break;
 	}
-	
-	asm("ldmia sp!, {r2-r3, r12}");
 }
 
 void PPU_Write16(u32 addr, u16 val)
 {
-	asm("stmdb sp!, {r2-r3, r12}");
-	
 	switch (addr)
 	{
 		// optimized route
@@ -2107,13 +2095,11 @@ void PPU_Write16(u32 addr, u16 val)
 			PPU_Write8(addr+1, val >> 8);
 			break;
 	}
-	
-	asm("ldmia sp!, {r2-r3, r12}");
 }
 
 
 ITCM_CODE void PPU_SNESVBlank()
-{
+{//iprintf("SNES VBL\n");
 	PPU_OAMAddr = PPU_OAMReload;
 }
 

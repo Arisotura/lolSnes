@@ -296,14 +296,15 @@ void Mem_Reset()
 	
 	// get uncached address
 	u32 ipcsize = (sizeof(IPCStruct) + 0x1F) & ~0x1F;
-	IPC = memalign(32, ipcsize);
-	DC_InvalidateRange(IPC, ipcsize);
+	IPC = memalign(32, ipcsize);u32 dorp = (u32)IPC;
+	memset(IPC, 0, ipcsize);
+	DC_FlushRange(IPC, ipcsize);
 	IPC = memUncached(IPC);
 	IPC->Pause = 0;
 	iprintf("IPC struct = %08X\n", IPC);
 	fifoSendValue32(FIFO_USER_01, 3);
 	fifoSendAddress(FIFO_USER_01, memCached(IPC));
-	
+	iprintf("cached=%08X/%08X\n", memCached(IPC), dorp);
 	Mem_HVBJOY = 0x00;
 	
 	Mem_MulA = 0;
@@ -340,9 +341,7 @@ ITCM_CODE void report_unk_lol(u32 op, u32 pc)
 {
 	if (op == 0xDB) 
 	{
-		asm("stmdb sp!, {r12}");
 		printf("STOP %06X\n", pc);
-		asm("ldmia sp!, {r12}");
 		return; 
 	}
 
@@ -386,8 +385,6 @@ inline u8 IO_ReadKeysHigh()
 
 u8 Mem_GIORead8(u32 addr)
 {
-	asm("stmdb sp!, {r12}");
-	
 	u8 ret = 0;
 	switch (addr)
 	{
@@ -432,15 +429,12 @@ u8 Mem_GIORead8(u32 addr)
 			ret = IO_ReadKeysHigh();
 			break;
 	}
-	
-	asm("ldmia sp!, {r12}");
+
 	return ret;
 }
 
 u16 Mem_GIORead16(u32 addr)
 {
-	asm("stmdb sp!, {r12}");
-	
 	u16 ret = 0;
 	switch (addr)
 	{
@@ -461,15 +455,12 @@ u16 Mem_GIORead16(u32 addr)
 			ret |= (Mem_GIORead8(addr + 1) << 8);
 			break;
 	}
-	
-	asm("ldmia sp!, {r12}");
+
 	return ret;
 }
 
 void Mem_GIOWrite8(u32 addr, u8 val)
 {
-	asm("stmdb sp!, {r12}");
-	
 	switch (addr)
 	{
 		case 0x00:
@@ -545,14 +536,10 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			}
 			break;
 	}
-	
-	asm("ldmia sp!, {r12}");
 }
 
 void Mem_GIOWrite16(u32 addr, u16 val)
 {
-	asm("stmdb sp!, {r12}");
-	
 	switch (addr)
 	{
 		case 0x02:
@@ -585,15 +572,11 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 			Mem_GIOWrite8(addr + 1, val >> 8);
 			break;
 	}
-	
-	asm("ldmia sp!, {r12}");
 }
 
 
 u8 Mem_JoyRead8(u32 addr)
 {
-	asm("stmdb sp!, {r12}");
-	
 	u8 ret = 0;
 
 	// this isn't proper or even nice
@@ -601,34 +584,24 @@ u8 Mem_JoyRead8(u32 addr)
 	// but this seems to convince SMAS that there is a joystick plugged in
 	if (addr == 0x16) ret = 0x01;
 	
-	asm("ldmia sp!, {r12}");
 	return ret;
 }
 
 u16 Mem_JoyRead16(u32 addr)
 {
-	asm("stmdb sp!, {r12}");
-	
 	u16 ret = 0;
 	
 	//iprintf("joy read16 40%02X\n", addr);
-	
-	asm("ldmia sp!, {r12}");
+
 	return ret;
 }
 
 void Mem_JoyWrite8(u32 addr, u8 val)
 {
-	asm("stmdb sp!, {r12}");
-	
-	asm("ldmia sp!, {r12}");
 }
 
 void Mem_JoyWrite16(u32 addr, u16 val)
 {
-	asm("stmdb sp!, {r12}");
-	
-	asm("ldmia sp!, {r12}");
 }
 
 

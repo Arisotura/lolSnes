@@ -71,13 +71,18 @@ _MemRead8:
 	ldrb r0, [r3, r0, lsr #0x13]
 	bx lr
 mr8_1:
+	stmdb sp!, {r1-r2, r12, lr}
+	
 	tst r3, #0x40000000
+	addeq lr, pc, #0x10
 	beq Mem_IORead8
 
-	bic r3, r3, #0xF0000000
-	mov r0, r0, lsl #0x13
-	add r0, r3, r0, lsr #0x13
-	b Mem_ROMRead8
+	bicne r3, r3, #0xF0000000
+	movne r0, r0, lsl #0x13
+	addne r0, r3, r0, lsr #0x13
+	blne Mem_ROMRead8
+	
+	ldmia sp!, {r1-r2, r12, pc}
 
 .macro MemRead8
 	bl _MemRead8
@@ -103,13 +108,18 @@ _MemRead16:
 	orr r0, r0, r3, lsl #0x8
 	bx lr
 mr16_1:
+	stmdb sp!, {r1-r2, r12, lr}
+	
 	tst r3, #0x40000000
+	addeq lr, pc, #0x10
 	beq Mem_IORead16
 
-	bic r3, r3, #0xF0000000
-	mov r0, r0, lsl #0x13
-	add r0, r3, r0, lsr #0x13
-	b Mem_ROMRead16
+	bicne r3, r3, #0xF0000000
+	movne r0, r0, lsl #0x13
+	addne r0, r3, r0, lsr #0x13
+	blne Mem_ROMRead16
+	
+	ldmia sp!, {r1-r2, r12, pc}
 
 .macro MemRead16
 	bl _MemRead16
@@ -153,7 +163,7 @@ _MemWrite8:
 	bxne lr
 	
 	tst r3, #0x20000000
-	bne Mem_IOWrite8
+	bne mw8_1
 	
 	tst r3, #0x80000000
 	ldrne r2, [memoryMap, #-0xC]
@@ -163,6 +173,10 @@ _MemWrite8:
 	mov r0, r0, lsl #0x13
 	strb r1, [r3, r0, lsr #0x13]
 	bx lr
+mw8_1:
+	stmdb sp!, {r2, r12, lr}
+	bl Mem_IOWrite8
+	ldmia sp!, {r2, r12, pc}
 
 .macro MemWrite8
 	bl _MemWrite8
@@ -178,7 +192,7 @@ _MemWrite16:
 	bxne lr
 	
 	tst r3, #0x20000000
-	bne Mem_IOWrite16
+	bne mw16_1
 
 	tst r3, #0x80000000
 	ldrne r2, [memoryMap, #-0xC]
@@ -191,6 +205,10 @@ _MemWrite16:
 	mov r1, r1, lsr #0x8
 	strb r1, [r3, #0x1]
 	bx lr
+mw16_1:
+	stmdb sp!, {r2, r12, lr}
+	bl Mem_IOWrite16
+	ldmia sp!, {r2, r12, pc}
 
 .macro MemWrite16
 	bl _MemWrite16
@@ -361,6 +379,14 @@ _MemWrite16:
 .endm
 
 @ --- ROM cache handling ------------------------------------------------------
+
+ROM_DoCacheBank:
+	cmp r0, #0x7E
+	cmpne r0, #0x7F
+	bxeq lr
+	stmdb sp!, {r12, lr}
+	bl ROM_CacheBank
+	ldmia sp!, {r12, pc}
 
 .macro UpdatePBCache
 	ands r0, snesPBR, #0xFF
@@ -737,7 +763,7 @@ frameloop:
 		mov r0, #0
 		ldr r1, =PPU_VCount
 		strh r0, [r1]
-		bl DMA_ReloadHDMA
+		SafeCall DMA_ReloadHDMA
 		b emuloop
 		
 newline:

@@ -31,6 +31,8 @@
 
 #include "lolsnes_screen.h"
 
+#include "twldsp.h"
+
 
 #define VERSION "v1.1"
 
@@ -296,6 +298,9 @@ int main(void)
 
 	iprintf("lolSnes " VERSION " -- by Mega-Mario\n");
 	iprintf("http://lolsnes.net/\n");
+	
+	TDSP_Init();
+	iprintf("we're alive\n");
 	
 	for (;;)
 	{

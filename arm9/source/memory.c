@@ -305,6 +305,7 @@ void Mem_Reset()
 	fifoSendValue32(FIFO_USER_01, 3);
 	fifoSendAddress(FIFO_USER_01, memCached(IPC));
 	iprintf("cached=%08X/%08X\n", memCached(IPC), dorp);
+	iprintf("dorp=%08X\n", *(vu32*)0x04004008);
 	Mem_HVBJOY = 0x00;
 	
 	Mem_MulA = 0;

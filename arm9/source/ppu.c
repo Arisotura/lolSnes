@@ -396,34 +396,28 @@ void PPU_Reset()
 		
 		
 	Mem_WRAMAddr = 0;
-		
-	
-	// allocate VRAM
-	*(u8*)0x04000240 = 0x81;
-	*(u8*)0x04000241 = 0x89;
-	*(u8*)0x04000243 = 0x91;
-	*(u8*)0x04000244 = 0x82;
-	*(u8*)0x04000245 = 0x8C;
-	
-	// setup BGs
-	*(u32*)0x04000000 = 0x40010000 | (4 << 27);
-	*(u16*)0x04000008 = PPU_BG[0].BGCnt = 0x2080 | (0 << 4) | (0 << 10);
-	*(u16*)0x0400000A = PPU_BG[1].BGCnt = 0x2081 | (1 << 4) | (1 << 10);
-	*(u16*)0x0400000C = PPU_BG[2].BGCnt = 0x2082 | (2 << 4) | (2 << 10);
-	*(u16*)0x0400000E = PPU_BG[3].BGCnt = 0x2083 | (3 << 4) | (3 << 10);
 	
 	
-	PPU_ModeNow = 0;
-	PPU_ModeChange(0);
+	swiWaitForVBlank();
+	vramSetBankA(VRAM_A_MAIN_BG);
+	
+	videoSetMode(MODE_5_2D);
+	bgInit(2, BgType_Bmp16, BgSize_B16_256x256, 0,0);
 	
 	
-	iprintf("VRAM   %08X | Map   %08X", (u32)&PPU_VRAM, (u32)&PPU_VRAMMap);
-	iprintf("Htiles %08X | OAM   %08X", (u32)&PPU_HighPrioTiles, (u32)&PPU_OAM);
+	u16* barf = (u16*)0x06000000;
+	for (u32 i = 0; i < 256*256; i++)
+	{
+		barf[i] = 0;//0x8000|i;
+	}
+	
+	dsp_sendData(0, 0xC000);
+	dsp_receiveData(0);
 }
 
 
 ITCM_CODE void PPU_UpdateOBJPrio()
-{
+{return;
 	u16* oam = (u16*)0x07000000;
 	u8* priolist = &PPU_OBJPrioList[0];
 	u8* curprio = &PPU_CurPrio[12];
@@ -448,7 +442,7 @@ ITCM_CODE void PPU_UpdateOBJPrio()
 }
 
 void PPU_UpdateEnabledBGs()
-{
+{return;
 	register u8 dirty = PPU_BGStatusDirty;
 	int i;
 	bool updateoam = (dirty & 0x10);
@@ -531,7 +525,7 @@ void PPU_UpdateEnabledBGs()
 
 
 void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
-{
+{return;
 	s16 vcount = PPU_VCount + 1 - PPU_YOffset;
 	u16 ds_vcount = *(vu16*)0x04000006;
 	int maxchanges;
@@ -583,7 +577,7 @@ void PPU_ScheduleLineChange(void (*action)(u32), u32 data)
 }
 
 void PPU_ResetLineChanges()
-{
+{return;
 	int i;
 	
 	for (i = 0; i < 192; i += 4)
@@ -593,7 +587,7 @@ void PPU_ResetLineChanges()
 }
 
 inline void PPU_DoLineChanges(u32 line)
-{
+{return;
 	int i;
 	register u8 limit = PPU_NumLineChanges[line];
 	register PPU_LineChange* change = &PPU_LineChanges[line][0];
@@ -609,7 +603,7 @@ inline void PPU_DoLineChanges(u32 line)
 
 
 ITCM_CODE void PPU_SwitchToMode7(u32 loluseless)
-{
+{return;
 	PPU_Mode = 7;
 	PPU_BG3Prio = 0;
 	u8 bgenable = (PPU_BGMain | PPU_BGSub);
@@ -623,7 +617,7 @@ ITCM_CODE void PPU_SwitchToMode7(u32 loluseless)
 }
 
 ITCM_CODE void PPU_SwitchFromMode7(u32 val)
-{
+{return;
 	u8 newmode = val & 0x07;
 	PPU_Mode = newmode;
 	
@@ -640,7 +634,7 @@ ITCM_CODE void PPU_SwitchFromMode7(u32 val)
 }
 
 ITCM_CODE void PPU_SetBG3Prio(u32 val)
-{
+{return;
 	int oldprio = PPU_BG3Prio;
 	if ((val & 0x0F) == 9) PPU_BG3Prio = 1;
 	else PPU_BG3Prio = 0;
@@ -650,21 +644,21 @@ ITCM_CODE void PPU_SetBG3Prio(u32 val)
 }
 
 ITCM_CODE void PPU_SetMainScreen(u32 val)
-{
+{return;
 	if (PPU_BGMain == val) return;
 	PPU_BGMain = val;
 	PPU_BGStatusDirty |= 0x02;
 }
 
 ITCM_CODE void PPU_SetSubScreen(u32 val)
-{
+{return;
 	if (PPU_BGSub == val) return;
 	PPU_BGSub = val;
 	PPU_BGStatusDirty |= 0x04;
 }
 
 ITCM_CODE void PPU_SetColorMath(u32 val)
-{
+{return;
 	if (PPU_ColorMath == val) return;
 	if ((PPU_ColorMath ^ val) & 0x10) PPU_BGStatusDirty |= 0x10;
 	PPU_ColorMath = val;
@@ -672,103 +666,103 @@ ITCM_CODE void PPU_SetColorMath(u32 val)
 }
 
 ITCM_CODE void PPU_SetBG1X(u32 val)
-{
+{return;
 	*PPU_BG[0].BGHOFS = val & 0xFFFF;
 	PPU_SetM7ScrollX(val >> 16);
 }
 ITCM_CODE void PPU_SetBG1Y(u32 val)
-{
+{return;
 	*PPU_BG[0].BGVOFS = (val & 0xFFFF) + PPU_YOffset;
 	PPU_SetM7ScrollY(val >> 16);
 }
 
 ITCM_CODE void PPU_SetBG2X(u32 val)
-{
+{return;
 	*PPU_BG[1].BGHOFS = val;
 }
 ITCM_CODE void PPU_SetBG2Y(u32 val)
-{
+{return;
 	*PPU_BG[1].BGVOFS = val + PPU_YOffset;
 }
 
 ITCM_CODE void PPU_SetBG3X(u32 val)
-{
+{return;
 	*PPU_BG[2].BGHOFS = val;
 }
 ITCM_CODE void PPU_SetBG3Y(u32 val)
-{
+{return;
 	*PPU_BG[2].BGVOFS = val + PPU_YOffset;
 }
 
 ITCM_CODE void PPU_SetBG4X(u32 val)
-{
+{return;
 	*PPU_BG[3].BGHOFS = val;
 }
 ITCM_CODE void PPU_SetBG4Y(u32 val)
-{
+{return;
 	*PPU_BG[3].BGVOFS = val + PPU_YOffset;
 }
 
 ITCM_CODE void PPU_SetM7A(u32 val)
-{
+{return;
 	PPU_M7A = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7B(u32 val)
-{
+{return;
 	PPU_M7B = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7C(u32 val)
-{
+{return;
 	PPU_M7C = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7D(u32 val)
-{
+{return;
 	PPU_M7D = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7RefX(u32 val)
-{
+{return;
 	if (val & 0x1000) val |= 0xE000;
 	PPU_M7RefX = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7RefY(u32 val)
-{
+{return;
 	if (val & 0x1000) val |= 0xE000;
 	PPU_M7RefY = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7ScrollX(u32 val)
-{
+{return;
 	if (val & 0x1000) val |= 0xE000;
 	PPU_M7ScrollX = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetM7ScrollY(u32 val)
-{
+{return;
 	if (val & 0x1000) val |= 0xE000;
 	PPU_M7ScrollY = val;
 	PPU_M7RefDirty = 1;
 }
 
 ITCM_CODE void PPU_SetSubBackdrop(u32 val)
-{
+{return;
 	*(u16*)0x05000000 = val ? val : PPU_MainBackdrop;
 }
 
 
 ITCM_CODE void PPU_UploadBGPal()
-{
+{return;
 	u32* src = (u32*)0x05000000;
 	u32* dst = (u32*)BG_PAL_BASE;
 	u32* dst2 = dst + 0x800;
@@ -872,7 +866,7 @@ ITCM_CODE void PPU_UploadBGPal()
 }
 
 void PPU_UploadBGChr(int nbg)
-{
+{return;
 	PPU_Background* bg = &PPU_BG[nbg];
 	u16 chrbase = bg->ChrBase;
 	
@@ -1031,7 +1025,7 @@ void PPU_UploadBGChr(int nbg)
 }
 
 void PPU_UploadBGScr(int nbg)
-{
+{return;
 	PPU_Background* bg = &PPU_BG[nbg];
 	u8* tm2l = &PPU_Tilemap2Linear[0];
 	u16* hptiles = (u16*)&PPU_HighPrioTiles[nbg];
@@ -1089,7 +1083,7 @@ void PPU_UploadBGScr(int nbg)
 }
 
 void PPU_UploadOBJChr()
-{
+{return;
 	u16 chrbase = PPU_OBJBase;
 	
 	u8* bp12 = &PPU_VRAM[chrbase];
@@ -1123,7 +1117,7 @@ void PPU_UploadOBJChr()
 }
 
 void PPU_SetupBG(int nbg, int depth, u16 mappaloffset)
-{
+{return;
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	register u8 dsbg = PPU_CurPrio[nbg];
@@ -1190,7 +1184,7 @@ void PPU_SetupBG(int nbg, int depth, u16 mappaloffset)
 }
 
 void PPU_ModeChange(u8 newmode)
-{
+{return;
 	PPU_LastNon7Mode = newmode;
 	iprintf("[%03d] PPU mode %d\n", *(vu16*)0x04000006, newmode);
 	switch (newmode)
@@ -1250,7 +1244,7 @@ void PPU_ModeChange(u8 newmode)
 
 
 inline void PPU_SetXScroll(int nbg, u8 val, void (*func)(u32))
-{
+{return;
 	u32 m7stuff = 0;
 	
 	if (nbg == 0)
@@ -1274,7 +1268,7 @@ inline void PPU_SetXScroll(int nbg, u8 val, void (*func)(u32))
 }
 
 inline void PPU_SetYScroll(int nbg, u8 val, void (*func)(u32))
-{
+{return;
 	u32 m7stuff = 0;
 	
 	if (nbg == 0)
@@ -1298,7 +1292,7 @@ inline void PPU_SetYScroll(int nbg, u8 val, void (*func)(u32))
 }
 
 inline void PPU_SetBGSCR(int nbg, u8 val)
-{
+{return;
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	int oldscrbase = bg->ScrBase;
@@ -1337,7 +1331,7 @@ inline void PPU_SetBGSCR(int nbg, u8 val)
 }
 
 inline void PPU_SetBGCHR(int nbg, u8 val)
-{
+{return;
 	PPU_Background* bg = &PPU_BG[nbg];
 	
 	int oldchrbase = bg->ChrBase;
@@ -1364,7 +1358,7 @@ inline void PPU_SetBGCHR(int nbg, u8 val)
 }
 
 void PPU_SetOBJCHR(u16 base, u16 gap)
-{
+{return;
 	if (base != PPU_OBJBase || gap != PPU_OBJGap)
 	{
 		int i;
@@ -1583,7 +1577,7 @@ void PPU_UpdateVRAM_Mode7(u32 addr, u16 val)
 }
 
 inline void PPU_UpdateVRAM(u32 addr, u16 oldval, u16 val)
-{
+{return;
 	PPU_VRAMBlock* block = &PPU_VRAMMap[addr >> 11];
 	
 	if (block->ChrUsage & 0x0001) PPU_UpdateVRAM_CHR(0, addr, val);
@@ -1772,9 +1766,15 @@ u16 PPU_Read16(u32 addr)
 
 	return ret;
 }
-
+int numio=0;
 void PPU_Write8(u32 addr, u8 val)
 {
+	if (addr < 0x40)
+	{//numio++;
+		// send write to DSP
+		dsp_sendData(0, (addr<<8) | val);
+	}
+	
 	switch (addr)
 	{
 		case 0x00: // force blank/master brightness
@@ -2076,10 +2076,10 @@ void PPU_Write16(u32 addr, u16 val)
 	{
 		// optimized route
 		
-		case 0x16:
+		/*case 0x16:
 			PPU_VRAMAddr = val;
 			PPU_VRAMPref = *(u16*)&PPU_VRAM[(PPU_VRAMAddr << 1) & 0xFFFEFFFF];
-			break;
+			break;*/
 			
 		case 0x40: *(u16*)&IPC->SPC_IOPorts[0] = val; break;
 		case 0x41: IPC->SPC_IOPorts[1] = val & 0xFF; IPC->SPC_IOPorts[2] = val >> 8; break;
@@ -2099,15 +2099,32 @@ void PPU_Write16(u32 addr, u16 val)
 
 
 ITCM_CODE void PPU_SNESVBlank()
-{//iprintf("SNES VBL\n");
+{
+	//iprintf("IO: %d\n", numio); numio = 0;
 	PPU_OAMAddr = PPU_OAMReload;
+	dsp_sendData(0, 0x8000);
 }
 
+ITCM_CODE void PPU_SNESVBlankEnd()
+{
+	//
+}
 
+ITCM_CODE void PPU_SNESHBlank()
+{numio++;
+	dsp_sendData(0, 0x4000 | (PPU_VCount & 0x1FF));
+}
+
+u32 gorp = 0;
 ITCM_CODE void PPU_VBlank()
 {
 	int i;
-	
+	//iprintf("%04X\n", *(vu16*)0x06000000);
+	u32 v = *(vu32*)0x06001000;
+	if (v > gorp) gorp = v;
+	iprintf("%08X %08X\n", v, gorp);
+	//iprintf("IO: %d\n", numio); numio = 0;
+	return;
 	// if we're not within SNES VBlank at this time, it means we're lagging
 	// and our registers are likely to contain bad values
 	// (especially master brightness)
@@ -2227,7 +2244,7 @@ ITCM_CODE void PPU_VBlank()
 }
 
 ITCM_CODE void PPU_HBlank()
-{
+{return;
 	u16 ds_vcount = *(vu16*)0x04000006 + 1;
 	if (ds_vcount >= 263) ds_vcount = 0;
 	if (ds_vcount >= 192) return;

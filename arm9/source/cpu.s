@@ -763,7 +763,10 @@ frameloop:
 		mov r0, #0
 		ldr r1, =PPU_VCount
 		strh r0, [r1]
-		SafeCall DMA_ReloadHDMA
+		stmdb sp!, {r12}
+		bl PPU_SNESVBlankEnd
+		bl DMA_ReloadHDMA
+		ldmia sp!, {r12}
 		b emuloop
 		
 newline:
@@ -782,7 +785,10 @@ emuloop:
 				bgt hblank_end
 				orr r0, r0, #0x4000
 				strh r0, [memoryMap, #-0x6]
-				SafeCall_03 DMA_DoHDMA
+				stmdb sp!, {r0, r3, r12}
+				bl PPU_SNESHBlank
+				bl DMA_DoHDMA
+				ldmia sp!, {r0, r3, r12}
 				
 hblank_end:
 				tst r0, #0x0800				@ check if we already triggered an IRQ in this scanline

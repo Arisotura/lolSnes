@@ -21,7 +21,7 @@
 #include "memory.h"
 
 
-u8 DMA_Chans[8*16];
+u8 DMA_Chans[8*16 + 1];
 u8 DMA_HDMAFlag;
 
 u8 HDMA_Pause[8];
@@ -52,6 +52,7 @@ void DMA_Write16(u32 addr, u16 val)
 		DMA_Chans[addr] = val & 0xFF;
 		DMA_Chans[addr + 1] = val >> 8;
 	}
+	DMA_Chans[0x80] = 0;
 }
 
 void DMA_Enable(u8 flag)

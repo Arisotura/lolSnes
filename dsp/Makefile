@@ -1,11 +1,23 @@
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
-endif
+# ifeq ($(strip $(DEVKITARM)),)
+# $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
+# endif
 
-include $(DEVKITARM)/ds_rules
+# include $(DEVKITARM)/ds_rules
+
+WSLENV ?= notwsl
+
+BASEPATH := $(DEVKITARM)/teak
+#BASEPATH := $(TEAK_LLVM)
+
+CLANG	:= $(BASEPATH)/clang
+MC  	:= $(BASEPATH)/llvm-mc
+LD		:= $(BASEPATH)/ld.lld
+ELF2DSP1:= "$(BASEPATH)/Elf2Dsp1.exe"
+
+#TARGET	:=	$(shell basename $(CURDIR))
 
 #---------------------------------------------------------------------------------
 # BUILD is the directory where object files & intermediate files will be placed
@@ -15,39 +27,35 @@ include $(DEVKITARM)/ds_rules
 # all directories are relative to this makefile
 #---------------------------------------------------------------------------------
 BUILD		:=	build
-SOURCES		:=	source  
+SOURCES		:=	src src/teak src/dmg
 INCLUDES	:=	include
 DATA		:=
-DSPBINS		:= ../dsp
 
 
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	#-mthumb -mthumb-interwork
+#ARCH	:=	-marm -mthumb-interwork
 
-CFLAGS	:=	-g -Wall -O3\
- 			-march=armv5te -mtune=arm946e-s -fomit-frame-pointer\
-			-ffast-math \
-			$(ARCH)
+CFLAGS	:=	-c --target=teak -march=teak -O2 -integrated-as -nostdlib -ffreestanding -fno-builtin
 
-CFLAGS	+=	$(INCLUDE) -DARM9
+#CFLAGS	+=	$(INCLUDE)
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
-ASFLAGS	:=	-g $(ARCH) -march=armv5te -mtune=arm946e-s
+ASFLAGS	:=	--arch=teak
 
-LDFLAGS	=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+LDFLAGS	=	-T ../linker.x
 
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS	:=	-lfat -lnds9
+LIBS	:=
  
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:=	$(LIBNDS)
+LIBDIRS	:=	
  
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
@@ -56,39 +64,32 @@ LIBDIRS	:=	$(LIBNDS)
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
  
-export ARM9ELF	:=	$(CURDIR)/$(TARGET).elf
+export ELFPATH	:=	$(CURDIR)/$(TARGET).elf
+export DSP1PATH	:=	$(CURDIR)/$(TARGET).cdc
 export DEPSDIR := $(CURDIR)/$(BUILD)
 
+ifneq ($(OS),Windows_NT)
+export winElfPath := $(shell wslpath -w $(ELFPATH))
+export winDsp1Path := $(shell wslpath -w $(DSP1PATH))
+else
+export winElfPath := $(ELFPATH)
+export winDsp1Path := $(DSP1PATH)
+endif
+
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
-					$(foreach dir,$(DATA),$(CURDIR)/$(dir)) \
-					$(foreach dir,$(DSPBINS),$(CURDIR)/$(dir))
+					$(foreach dir,$(DATA),$(CURDIR)/$(dir))
  
 CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
-CDCFILES	:=	$(foreach dir,$(DSPBINS),$(notdir $(wildcard $(dir)/*.cdc)))
- 
-#---------------------------------------------------------------------------------
-# use CXX for linking C++ projects, CC for standard C
-#---------------------------------------------------------------------------------
-ifeq ($(strip $(CPPFILES)),)
-#---------------------------------------------------------------------------------
-	export LD	:=	$(CC)
-#---------------------------------------------------------------------------------
-else
-#---------------------------------------------------------------------------------
-	export LD	:=	$(CXX)
-#---------------------------------------------------------------------------------
-endif
-#---------------------------------------------------------------------------------
 
-export OFILES	:=	$(addsuffix .o,$(BINFILES)) $(addsuffix .o,$(CDCFILES)) \
+export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 					$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
  
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD)
+export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I $(CURDIR)/$(dir)) \
+			$(foreach dir,$(LIBDIRS),-I $(dir)/include) \
+			-I $(CURDIR)/$(BUILD)
  
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
  
@@ -102,32 +103,35 @@ $(BUILD):
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) *.elf *.nds* *.bin 
+	@rm -fr $(BUILD) *.elf *.cdc *.bin 
  
  
 #---------------------------------------------------------------------------------
 else
+
+%.o: %.c
+	@echo $(notdir $<)
+	$(CLANG) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -o $@ $<
+
+%.o: %.s
+	@echo $(notdir $<)
+	$(CLANG) -x assembler-with-cpp -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -o $@ $<
+# $(MC) -MMD -MP -MF $(DEPSDIR)/$*.d $(ASFLAGS) --filetype=obj -o $@ $<
  
 #---------------------------------------------------------------------------------
 # main targets
 #---------------------------------------------------------------------------------
-$(ARM9ELF)	:	$(OFILES)
+$(DSP1PATH)	: $(ELFPATH)
+	@echo creating dsp1 from $(notdir $<)
+	$(ELF2DSP1) -s -o "$(winDsp1Path)" "$(winElfPath)"
+
+$(ELFPATH)	:	$(OFILES)
 	@echo linking $(notdir $@)
-	@$(LD)  $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+	@$(LD)  $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -Map symbols.map -o $@
 
 #---------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data 
 #---------------------------------------------------------------------------------
-
-define schmo
-	bin2s -a 4 $< | $(AS) -o $(<F).o
-endef
-
-%.cdc.o : %.cdc
-	@echo $(notdir $<)
-	$(schmo)
-	arm-none-eabi-objcopy --rename-section .rodata=.text $(@)
-	
 %.bin.o	:	%.bin
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
@@ -137,4 +141,4 @@ endef
  
 #---------------------------------------------------------------------------------------
 endif
-#---------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------- 

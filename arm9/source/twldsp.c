@@ -193,6 +193,30 @@ void TDSP_LoadBinary(const dsp_dsp1_t* dsp1)
         memcpy(dst, (u16*)(((u8*)dsp1) + dsp1->segments[i].offset), size);
 		DC_FlushRange(dst, size);
     }
+	
+	u16* tiletbl = (u16*)DspToArm9Address(true, 0x10000);
+	for (u32 i = 0; i < 0x10000; i++)
+	{
+		u16 o = 0;
+		if (i & 0x0080) o |= 0x0001;
+		if (i & 0x8000) o |= 0x0002;
+		if (i & 0x0040) o |= 0x0004;
+		if (i & 0x4000) o |= 0x0008;
+		if (i & 0x0020) o |= 0x0010;
+		if (i & 0x2000) o |= 0x0020;
+		if (i & 0x0010) o |= 0x0040;
+		if (i & 0x1000) o |= 0x0080;
+		if (i & 0x0008) o |= 0x0100;
+		if (i & 0x0800) o |= 0x0200;
+		if (i & 0x0004) o |= 0x0400;
+		if (i & 0x0400) o |= 0x0800;
+		if (i & 0x0002) o |= 0x1000;
+		if (i & 0x0200) o |= 0x2000;
+		if (i & 0x0001) o |= 0x4000;
+		if (i & 0x0100) o |= 0x8000;
+		tiletbl[i] = o;
+	}
+	DC_FlushRange(tiletbl, 0x20000);
 
     TDSP_SetMemoryMapping(true, 0, (TWR_WRAM_BC_SLOT_SIZE * TWR_WRAM_BC_SLOT_COUNT) >> 1, true);
     TDSP_SetMemoryMapping(false, 0, (TWR_WRAM_BC_SLOT_SIZE * TWR_WRAM_BC_SLOT_COUNT) >> 1, true);

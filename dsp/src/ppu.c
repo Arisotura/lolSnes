@@ -6,9 +6,8 @@
 PPU_State PPU;
 u16 PPU_Output[256*2];
 u16 PPU_CurOutput;
-u16 PPU_MainScreen[16+256+16];
-u16 PPU_SubScreen[16+256+16];
-u16 PPU_OBJLine[16+256+16];
+
+u16 PPU_CmdFIFO[1024];
 
 #define PPU_VRAM(addr) (*(u16*)((addr) & 0x7FFF))
 
@@ -34,12 +33,6 @@ void PPU_Reset(void)
 		*(vu16*)i = 0;
 	for (u16 i = 0; i < 256*2; i++)
 		PPU_Output[i] = 0;
-	for (u16 i = 0; i < 16+256+16; i++)
-		PPU_MainScreen[i] = 0;
-	for (u16 i = 0; i < 16+256+16; i++)
-		PPU_SubScreen[i] = 0;
-	for (u16 i = 0; i < 16+256+16; i++)
-		PPU_OBJLine[i] = 0;
 	
 	PPU_CurOutput = 0;
 }
@@ -65,7 +58,7 @@ void PPU_SetOBJCnt(u16 val)
 
 void PPU_SetBGScr(u16 num, u16 val)
 {
-	PPU.BGScr[num] = (val & 0xFC) << 8;
+	PPU.BGScr[num] = (val & 0x7C) << 8;
 	
 	switch (val & 0x3)
 	{
@@ -165,12 +158,12 @@ void PPU_Write8(u16 addr, u16 val)
 	case 0x0A: PPU_SetBGScr(3, val); break;
 	
 	case 0x0B:
-		PPU.BGChr[0] = (val & 0x0F) << 12;
-		PPU.BGChr[1] = (val & 0xF0) << 8;
+		PPU.BGChr[0] = (val & 0x07) << 12;
+		PPU.BGChr[1] = (val & 0x70) << 8;
 		break;
 	case 0x0C:
-		PPU.BGChr[2] = (val & 0x0F) << 12;
-		PPU.BGChr[3] = (val & 0xF0) << 8;
+		PPU.BGChr[2] = (val & 0x07) << 12;
+		PPU.BGChr[3] = (val & 0x70) << 8;
 		break;
 		
 	case 0x0D: 
@@ -541,6 +534,7 @@ void PPU_DrawScanline(u16 line)
 	
 	timer_start();
 	u32 t1 = timer_read();
+	
 	/*for (u16 i = PPU_CurOutput; i < PPU_CurOutput+256; i++)
 		PPU_Output[i] = 0x83E0;
 	for (u16 i = PPU_CurOutput; i < PPU_CurOutput+256; i++)
@@ -550,7 +544,8 @@ void PPU_DrawScanline(u16 line)
 	//	*(u32*)&PPU_Output[i] = 0x83E083E0;
 	//PPU_test(&PPU_Output[PPU_CurOutput]);
 	//PPU_test2(&PPU_Output[PPU_CurOutput+1]);
-	PPU_DoDrawScanline(&PPU, &PPU_Output[PPU_CurOutput+1], line);
+	PPU_DoDrawScanline(&PPU, &PPU_Output[PPU_CurOutput], line);
+	
 	u32 t2 = timer_read();
 	u32 diff = t1-t2;
 	PPU_Output[PPU_CurOutput] = diff & 0xFFFF;
@@ -561,9 +556,12 @@ void PPU_DrawScanline(u16 line)
 	
 	//or (u16 i = 0; i < 256; i++) PPU_Output[i] = PPU.CGRAM[i]|0x8000;
 	dma_waitBusy();
+	//dma_transferDspToArm9(&PPU_Output[PPU_CurOutput], 0x06800000+(line<<9), 256);
 	dma_transferDspToArm9(&PPU_Output[PPU_CurOutput], 0x06000000+(line<<9), 256);
 	//dma_transferDspToArm9(&PPU_VRAM(PPU_CurOutput), 0x06000000+(line<<9), 256);
 	PPU_CurOutput ^= 256;
+	//PPU_CurOutput += 0x100;
+	//PPU_CurOutput &= 0x300;
 }
 
 void PPU_VBlank(void)

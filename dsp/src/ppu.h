@@ -2,7 +2,7 @@
 
 typedef struct
 {
-	// 00 - general
+	// 0x000 - general
 	u16 DispCnt;
 	u16 SetIni;
 	
@@ -17,9 +17,9 @@ typedef struct
 	u16 BGOld;
 	u16 M7Old;
 	
-	u16 _pad0[12];
+	u16 _pad0[6];
 	
-	// 10 - BG layers
+	// 0x010 - BG layers
 	u16 BGScr[4];
 	u16 BGChr[4];
 	u16 BGXScr2[4];
@@ -27,6 +27,7 @@ typedef struct
 	u16 BGXPos[4];
 	u16 BGYPos[4];
 	
+	// 0x028 - mode 7 coords
 	s16 M7XPos;
 	s16 M7YPos;
 	s16 M7XCenter;
@@ -36,13 +37,13 @@ typedef struct
 	s16 M7C;
 	s16 M7D;
 	
-	// 20 - OBJ
+	// 0x030 - OBJ
 	u16 OBJChr;
 	u16 OBJGap;
 	u16 OBJWidth[2];
 	u16 OBJHeight[2];
 	
-	// 30 - window
+	// 0x036 - window
 	u16 WindowDirty;
 	u16 WindowX[4];
 	u16 BGWindowMask[4];
@@ -53,7 +54,7 @@ typedef struct
 	u16 ColorMathWindowCombine;
 	u16 WindowEnable;
 	
-	// 40 - CGRAM/VRAM/OAM access
+	// 0x048 - CGRAM/VRAM/OAM access
 	u16 CGRAMAddr;
 	u16 CGRAMVal;
 	u16 VRAMInc;
@@ -65,13 +66,23 @@ typedef struct
 	u16 OAMReload;
 	u16 OAMPrio;
 	u16 FirstOBJ;
-	u16 _pad4[10];
 	
-	// 50 - CGRAM
+	u16 _pad1[13];
+	
+	// 0x060 - CGRAM
 	u16 CGRAM[256];
 	
-	// 150 - OAM
+	// VRAM hardcoded at absolute address 0x0000
+	
+	// 0x160 - OAM
 	u16 OAM[256+16];
+	
+	// 0x270 - render buffers
+	u16 LineBuffer[256*2];		// 0x270
+	u16 OBJLineBuffer[256];		// 0x470
+	u16 LineWindowMask[256];	// 0x570
+	
+	// 0x670 - struct end
 	
 } PPU_State;
 

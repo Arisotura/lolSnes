@@ -219,6 +219,8 @@ s16 PPU_M7A DTCM_DATA,
 u8* PPU_DSOBJ = NULL;		// 32K
 u32 PPU_DSOBJDirty = 0;
 
+int CurFrame;
+
 
 u32 Mem_WRAMAddr;
 
@@ -398,8 +400,10 @@ void PPU_Reset()
 	Mem_WRAMAddr = 0;
 	
 	
+	CurFrame = 0;
 	swiWaitForVBlank();
 	vramSetBankA(VRAM_A_MAIN_BG);
+	vramSetBankB(VRAM_B_LCD);
 	
 	videoSetMode(MODE_5_2D);
 	bgInit(2, BgType_Bmp16, BgSize_B16_256x256, 0,0);
@@ -2097,7 +2101,7 @@ void PPU_Write16(u32 addr, u16 val)
 	}
 }
 
-
+int lastvc = 0;
 ITCM_CODE void PPU_SNESVBlank()
 {
 	//iprintf("IO: %d\n", numio); numio = 0;
@@ -2112,17 +2116,42 @@ ITCM_CODE void PPU_SNESVBlankEnd()
 
 ITCM_CODE void PPU_SNESHBlank()
 {numio++;
-	dsp_sendData(0, 0x4000 | (PPU_VCount & 0x1FF));
+	// TODO 239-line resolution for PAL mode (see SETINI 2133 bit2)
+	if (PPU_VCount > 0 && PPU_VCount <= 224)
+		dsp_sendData(0, 0x4000 | PPU_VCount);// | (CurFrame ? 0:0x100));
+	
+	//if (PPU_VCount != (lastvc+1))
+	//	iprintf("AAA %d->%d\n", lastvc, PPU_VCount);
+	lastvc = PPU_VCount;
 }
 
 u32 gorp = 0;
 ITCM_CODE void PPU_VBlank()
 {
 	int i;
-	//iprintf("%04X\n", *(vu16*)0x06000000);
-	u32 v = *(vu32*)0x06001000;
+	
+	/*CurFrame = 0;
+	swiWaitForVBlank();
+	vramSetBankA(VRAM_A_MAIN_BG);
+	vramSetBankB(VRAM_B_LCD);*/
+	/*CurFrame ^= 1;
+	if (CurFrame)
+	{
+		vramSetBankB(VRAM_B_MAIN_BG);
+		vramSetBankA(VRAM_A_LCD);
+	}
+	else
+	{
+		vramSetBankA(VRAM_A_MAIN_BG);
+		vramSetBankB(VRAM_B_LCD);
+	}*/
+	
+	//if (*(vu16*)0x06000000 != 0x8000)
+	//	iprintf("%04X %04X %04X %04X %04X %04X\n", *(vu16*)0x06000200, *(vu16*)0x06000210, *(vu16*)0x06000220, *(vu16*)0x06000400, *(vu16*)0x06001000, *(vu16*)0x06001010);
+iprintf("%08X\n", *(vu32*)0x06000200);
+	/*u32 v = *(vu32*)0x06001000;
 	if (v > gorp) gorp = v;
-	iprintf("%08X %08X\n", v, gorp);
+	iprintf("%08X %08X\n", v, gorp);*/
 	//iprintf("IO: %d\n", numio); numio = 0;
 	return;
 	// if we're not within SNES VBlank at this time, it means we're lagging

@@ -18,6 +18,10 @@ DrawBG_8x8_4bpp:
 	addl r7, a0
 	mov a0l, r5
 	
+	mov 0xC, a0h
+	or 0x3, a0
+	mov a0, b1
+	
 	addv 0x24, r5
 	mov b0, a0
 	add [r5], a0	// a0l = Y pos. + Y scroll
@@ -91,9 +95,13 @@ _draw884_no_yflip:
 	mov [r5], a0l	// PPU.BGChr[n]
 	add a0, a1
 	mov a1l, r4		// r4 = offset to tile data
-	mov [r4], r0	// r0 = tile planes 0/1
+	mov [r4], a0l	// r0 = tile planes 0/1
+	//movp a0l, r0
+	.short 0x0040
 	addv 8, r4
-	mov [r4], r1	// r1 = tile planes 2/3
+	mov [r4], a0l	// r1 = tile planes 2/3
+	//movp a0l, r1
+	.short 0x0041
 	
 	// TODO: xflip
 	
@@ -106,16 +114,19 @@ _draw884_no_yflip:
 	and 7, a0
 	sub a0, a1
 	mov a1l, y0			// y0 = number of pixels to draw
+	shl a0, always
 	mov a0l, sv
 	//mov r0, a0
 	//mov r1, a0h
-	mov r1, a0
-	shfi a0, a0, +16
+	mov r1, a0l
+	shfi a0, a0, +18
 	or r0, a0
-	shfc a0, a0, always
+	//shfc a0, a0, always	// FIXME goes the wrong way -- need neg opcode
+	mov a0, b0
 	
 	// adjust y0 if we are drawing at the right edge
 	pusha a0
+	push a0e
 	mov r6, a0l
 	cmp 248, a0
 	brr _draw844_notlasttile, le
@@ -123,45 +134,22 @@ _draw884_no_yflip:
 	sub r6, a0
 	mov a0l, y0
 _draw844_notlasttile:
+	pop a0e
 	popa a0
 	
 	subv 1, y0
-	mov b1l, r5
+	//mov b1l, r5
+	.short 0x58B4 //mov ext0, r5
+	
 	//swap (a0,b0),(a1,b1)
-	.short 0x4984
+	//.short 0x4984
 	//mov 0x8080, r0
 	//mov 0x3F80, r1
 	bkrep y0, _draw884_tile_loop
-		/*mov b0l, a0l
-		and r0, a0
-		add r1, a0
-		shfi a0, a0, -14
-		mov b0h, a1l
-		and r0, a1
-		add r1, a1
-		shfi a1, a1, -14
-		shfi a1, a1, +2
-		or a1, a0*/
+		and b0, b1, a0
+		or a0h, a0
 		
-		clr a0, always
-		tst0 0x0080, b0l
-		brr _draw884_b0, eq
-		or 0x1, a0
-_draw884_b0:
-		tst0 0x8000, b0l
-		brr _draw884_b1, eq
-		or 0x2, a0
-_draw884_b1:
-		tst0 0x0080, b0h
-		brr _draw884_b2, eq
-		or 0x4, a0
-_draw884_b2:
-		tst0 0x8000, b0h
-		brr _draw884_b3, eq
-		or 0x8, a0
-_draw884_b3:
-		
-		tst0 0xF, a0l
+		//tst0 0xF, a0l
 		brr _draw884_transparent, eq
 			add r2, a0
 			mov a0l, r4
@@ -172,11 +160,13 @@ _draw884_transparent:
 
 		addv 1, r5
 		addv 1, r6
-		shl b0, always
+		//shl b0, always
+		shfi b0, b0, -2
 _draw884_tile_loop:
 	//swap (a0,b0),(a1,b1)
-	.short 0x4984
-	mov r5, b1l
+	//.short 0x4984
+	//mov r5, b1l
+	.short 0x5A85 // mov r5, ext0
 	pop r5
 	
 	cmpv 256, r6
@@ -200,6 +190,7 @@ PPU_DoDrawScanline:
 	push r2
 	push r7
 	set 0x80, mod0
+	load 0x1, movpd
 	
 	mov a1l, r0
 	mov b0l, r1
@@ -209,7 +200,7 @@ PPU_DoDrawScanline:
 	tst0 0x80, [r7]	// DispCnt
 	brr _draw_notforcedblank, eq
 	mov 0x8000, a0h
-	mov 0x8000, a0
+	or 0x8000, a0
 	mov 0x7F, r1
 	bkrep r1, _draw_blankloop
 	mov a0, [arrn0+ars1] // store to [r0], postincrement of 2
@@ -229,8 +220,9 @@ _draw_notforcedblank:
 vorpi:*/
 
 	push r0
-	mov 0x801F, a0h
-	mov 0x801F, a0
+	mov 0x8000, a0h
+	or 0x8000, a0
+	//mov 0, a0
 	mov 0x7F, r1
 	bkrep r1, _draw_backdroploop
 	mov a0, [arrn0+ars1] // store to [r0], postincrement of 2
@@ -240,7 +232,8 @@ _draw_backdroploop:
 
 	mov 0, a0l
 	// TODO save/restore b0l
-	mov r0, b1l
+	//mov r0, b1l
+	.short 0x5A80 //mov r0, ext0
 	call DrawBG_8x8_4bpp, always
 	
 _draw_ret:

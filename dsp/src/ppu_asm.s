@@ -1,5 +1,12 @@
 .section .text
 
+#define PPU_BGScr		0x10s7
+#define PPU_BGChr		0x14s7
+#define PPU_BGXScr2		0x18s7
+#define PPU_BGYScr2		0x1Cs7
+#define PPU_BGXPos		0x20s7
+#define PPU_BGYPos 		0x24s7
+
 .global PPU_DoDrawScanline
 
 
@@ -14,65 +21,63 @@ DrawBG_8x8_4bpp:
 	push r3
 	push r4
 	push r5
+	push r6
+	push r7
 	
+	mov r7, ext3
+	addv 0x60, ext3 	// ext3 = CGRAM
 	addl r7, a0
-	mov a0l, r5
+	mov a0l, r7			// r7 = PPU struct + BG# (for accessing BG state)
 	
 	mov 0xC, a0h
 	or 0x3, a0
 	mov a0, b1
 	
-	addv 0x24, r5
 	mov b0, a0
-	add [r5], a0	// a0l = Y pos. + Y scroll
+	add [r7+PPU_BGYPos], a0	// a0l = Y pos. + Y scroll
 	mov a0l, r4
 	and 0x7, a0
-	//mov a0l, [0x8801]		// [8801] = ypos & 7
-	.short 0xD4BC, 0x8801
+	mov a0l, ext1		// ext1 = ypos & 7
+	//.short 0xD4BC, 0x8801
 	mov r4, a0l
 	
 	// calculate base screen address for this scanline
 	
-	subv 0x14, r5
-	mov [r5], a1l		// PPU.BGScr[n]
+	mov [r7+PPU_BGScr], a1		// PPU.BGScr[n]
 	and 0xF8, a0
 	shfi a0, a0, +2
 	add a0, a1
 	tst0 0x100, r4
 	brr _draw884_no_y512, eq
-		addv 0xC, r5
-		add [r5], a1
-		subv 0xC, r5
+		add [r7+PPU_BGYScr2], a1
 _draw884_no_y512:
-	//mov a1l, [0x8800]		// [8800] = base screen addr.
-	.short 0xD5BC, 0x8800
+	mov a1l, ext2		// ext2 = base screen addr.
+	//.short 0xD5BC, 0x8800
 	
-	subv 0x10, r5
+	// load first tile
 	
-	mov 0, r6				// r6 = current X pos.
+	clr a0, always
+	
 _draw884_main_loop:
+	mov a0, r6				// r6 = current X pos.
+	
 	// load tile
 	
-	push r5
-	addv 0x20, r5
-	mov [r5], a1l		// PPU.BGXPos[n]
+	mov [r7+PPU_BGXPos], a1		// PPU.BGXPos[n]
 	add r6, a1
 	mov a1l, r3
 	and 0xF8, a1
 	shfi a1, a1, -3
 	tst0 0x100, r3
 	brr _draw884_no_x512, eq
-		subv 0x8, r5
-		add [r5], a1
-		addv 0x8, r5
+		add [r7+PPU_BGXScr2], a1
 _draw884_no_x512:
-	//add [0x8800], a1
-	.short 0xD5F8, 0x8800
+	add ext2, a1
+	//.short 0xD5F8, 0x8800
 	mov a1l, r2
 	mov [r2], r3	// r3 = tilemap entry
 	
-	mov r7, r2
-	addv 0x60, r2
+	mov ext3, r2
 	mov r3, a1l
 	and 0x1C00, a1
 	shfi a1, a1, -6
@@ -84,32 +89,44 @@ _draw884_no_x512:
 	mov r3, a1l
 	and 0x03FF, a1
 	shfi a1, a1, +4
-	//mov [0x8801], a0
-	.short 0xD4B8, 0x8801
+	mov ext1, a0
+	//.short 0xD4B8, 0x8801
 	tst0 0x8000, r3 // yflip
 	brr _draw884_no_yflip, eq
-		xor 7, a0
+		xor 7u8, a0
 _draw884_no_yflip:
 	add a0, a1
-	subv 0xC, r5
-	mov [r5], a0l	// PPU.BGChr[n]
+	mov [r7+PPU_BGChr], a0	// PPU.BGChr[n]
 	add a0, a1
 	mov a1l, r4		// r4 = offset to tile data
 	mov [r4], a0l	// r0 = tile planes 0/1
-	//movp a0l, r0
-	.short 0x0040
 	addv 8, r4
-	mov [r4], a0l	// r1 = tile planes 2/3
-	//movp a0l, r1
-	.short 0x0041
+	mov [r4], a1l	// r1 = tile planes 2/3
 	
-	// TODO: xflip
+	tst0 0x4000, r3
+	brr _draw884_xflip, neq
+		//movp a0l, r0
+		.short 0x0040
+		//movp a1l, r1
+		.short 0x0061
+		brr _draw884_no_xflip, always
+_draw884_xflip:
+		shfi a0, a0, +8
+		shfi a1, a1, +8
+		or a0h, a0
+		or a1h, a1
+		//movp a0l, r0
+		.short 0x0040
+		//movp a1l, r1
+		.short 0x0061
+		bitrev r0
+		bitrev r1
+_draw884_no_xflip:
 	
 	// draw tile
 	
 	mov 8, a1l
-	addv 0xC, r5
-	mov [r5], a0l		// PPU.BGXPos[n]
+	mov [r7+PPU_BGXPos], a0		// PPU.BGXPos[n]
 	add r6, a0
 	and 7, a0
 	sub a0, a1
@@ -125,31 +142,20 @@ _draw884_no_yflip:
 	mov a0, b0
 	
 	// adjust y0 if we are drawing at the right edge
-	pusha a0
-	push a0e
-	mov r6, a0l
-	cmp 248, a0
+	cmpv 248, r6
 	brr _draw844_notlasttile, le
 	mov 256, a0l
 	sub r6, a0
 	mov a0l, y0
 _draw844_notlasttile:
-	pop a0e
-	popa a0
 	
 	subv 1, y0
-	//mov b1l, r5
-	.short 0x58B4 //mov ext0, r5
+	mov ext0, r5
 	
-	//swap (a0,b0),(a1,b1)
-	//.short 0x4984
-	//mov 0x8080, r0
-	//mov 0x3F80, r1
 	bkrep y0, _draw884_tile_loop
 		and b0, b1, a0
 		or a0h, a0
-		
-		//tst0 0xF, a0l
+
 		brr _draw884_transparent, eq
 			add r2, a0
 			mov a0l, r4
@@ -158,20 +164,20 @@ _draw844_notlasttile:
 			mov r4, [r5]		// store final pixel
 _draw884_transparent:
 
-		addv 1, r5
-		addv 1, r6
-		//shl b0, always
+		modr [r5++]
 		shfi b0, b0, -2
 _draw884_tile_loop:
-	//swap (a0,b0),(a1,b1)
-	//.short 0x4984
-	//mov r5, b1l
-	.short 0x5A85 // mov r5, ext0
-	pop r5
+
+	mov r5, ext0
 	
-	cmpv 256, r6
-	br _draw884_main_loop, lt
+	mov r6, a0
+	add y0, a0
+	add 1u8, a0
+	cmp 255u8, a0
+	br _draw884_main_loop, le
 	
+	pop r7
+	pop r6
 	pop r5
 	pop r4
 	pop r3
@@ -233,7 +239,7 @@ _draw_backdroploop:
 	mov 0, a0l
 	// TODO save/restore b0l
 	//mov r0, b1l
-	.short 0x5A80 //mov r0, ext0
+	mov r0, ext0
 	call DrawBG_8x8_4bpp, always
 	
 _draw_ret:

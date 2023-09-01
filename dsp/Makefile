@@ -9,7 +9,8 @@
 
 WSLENV ?= notwsl
 
-BASEPATH := $(DEVKITARM)/teak
+#BASEPATH := $(DEVKITARM)/teak
+BASEPATH := /opt/teak-llvm/build/bin
 #BASEPATH := $(TEAK_LLVM)
 
 CLANG	:= $(BASEPATH)/clang

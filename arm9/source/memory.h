@@ -28,9 +28,27 @@
 
 typedef struct
 {
+	u8 __pad3[2];		// -40 
+	u8 LastBusVal;		// -38
+	u8 __pad2;			// -37
+	
+	s32 SPC_CyclesPerLine;	// -36 | cycleratio * 1364
+	s32 SPC_CycleRatio;		// -32
+	s32 SPC_LastCycle;		// -28 | SPC cycle count (<<24) at last SPC run
+	
+	u16 IRQ_VMatch;		// -24
+	u16 IRQ_HMatch;		// -22
+	u16 IRQ_CurHMatch; 	// -20 | reset when the IRQ is fired
+	
+	u16 VCount;		// -18
+	
+	u8 __pad1[2];	// -16 for 'full' HCount (lower 16 bits are garbage)
+	u16 HCount;		// -14
+	
 	u32 SRAMMask;	// -0xC
 	
-	u8 __pad0[2];	// -0x8
+	u8 TotalLines;		// -8 | 262 for NTSC, 312 for PAL
+	u8 ScreenHeight; 	// -7 | 224 or 239
 	
 	u8 IRQCond;		// -0x6
 	
@@ -67,6 +85,7 @@ extern u8 ROM_Region;
 extern bool Mem_HiROM;
 extern bool Mem_FastROM;
 extern u32* Mem_PtrTable;
+extern Mem_StatusData* Mem_Status;
 
 extern u8 Mem_SysRAM[0x20000];
 

@@ -58,8 +58,8 @@ _MemRead8:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x60000
-	subne snesCycles, snesCycles, #0x80000
+	addeq snesCycles, snesCycles, #0x60000
+	addne snesCycles, snesCycles, #0x80000
 	tst r3, #0x20000000
 	bne mr8_1
 	
@@ -92,8 +92,8 @@ _MemRead16:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0xC0000
-	subne snesCycles, snesCycles, #0x100000
+	addeq snesCycles, snesCycles, #0xC0000
+	addne snesCycles, snesCycles, #0x100000
 	tst r3, #0x20000000
 	bne mr16_1
 	
@@ -129,8 +129,8 @@ _MemRead24:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x120000
-	subne snesCycles, snesCycles, #0x180000
+	addeq snesCycles, snesCycles, #0x120000
+	addne snesCycles, snesCycles, #0x180000
 	tst r3, #0x80000000
 	ldrne r2, [memoryMap, #-0xC]
 	andne r0, r0, r2
@@ -157,8 +157,8 @@ _MemWrite8:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x60000
-	subne snesCycles, snesCycles, #0x80000
+	addeq snesCycles, snesCycles, #0x60000
+	addne snesCycles, snesCycles, #0x80000
 	tst r3, #0x40000000
 	bxne lr
 	
@@ -186,8 +186,8 @@ _MemWrite16:
 	bic r3, r0, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0xC0000
-	subne snesCycles, snesCycles, #0x100000
+	addeq snesCycles, snesCycles, #0xC0000
+	addne snesCycles, snesCycles, #0x100000
 	tst r3, #0x40000000
 	bxne lr
 	
@@ -222,7 +222,7 @@ mw16_1:
 	add snesS, snesS, #0x10000
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
-	sub snesCycles, snesCycles, #0x80000
+	add snesCycles, snesCycles, #0x80000
 	bic r3, r3, #0xF0000000
 	mov r0, snesS, lsl #0x3
 	ldrb r0, [r3, r0, lsr #0x13]
@@ -232,7 +232,7 @@ mw16_1:
 	add snesS, snesS, #0x20000
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
-	sub snesCycles, snesCycles, #0x100000
+	add snesCycles, snesCycles, #0x100000
 	bic r3, r3, #0xF0000000
 	mov r0, snesS, lsl #0x3
 	add r3, r3, r0, lsr #0x13
@@ -244,7 +244,7 @@ mw16_1:
 .macro StackWrite8 src=r0
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
-	sub snesCycles, snesCycles, #0x80000
+	add snesCycles, snesCycles, #0x80000
 	tst r3, #0x40000000
 	bne 1f
 	bic r3, r3, #0xF0000000
@@ -257,7 +257,7 @@ mw16_1:
 .macro StackWrite16 src=r0
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
-	sub snesCycles, snesCycles, #0x100000
+	add snesCycles, snesCycles, #0x100000
 	tst r3, #0x40000000
 	bne 1f
 	bic r3, r3, #0xF0000000
@@ -282,8 +282,8 @@ mw16_1:
 	bic r3, r3, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x60000
-	subne snesCycles, snesCycles, #0x80000
+	addeq snesCycles, snesCycles, #0x60000
+	addne snesCycles, snesCycles, #0x80000
 	mov r0, snesPC, lsl #0x3
 	add r2, r3, r0, lsr #0x13
 	bic r2, #0xF0000000
@@ -294,16 +294,16 @@ mw16_1:
 @ can be used multiple times-- r0 or r1 should be used as dest
 .macro Prefetch8 dst=r0
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x60000
-	subne snesCycles, snesCycles, #0x80000
+	addeq snesCycles, snesCycles, #0x60000
+	addne snesCycles, snesCycles, #0x80000
 	ldrb \dst, [r2, #1]!
 	add snesPC, snesPC, #0x10000
 .endm
 
 .macro Prefetch16
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0xC0000
-	subne snesCycles, snesCycles, #0x100000
+	addeq snesCycles, snesCycles, #0xC0000
+	addne snesCycles, snesCycles, #0x100000
 	ldrb r0, [r2, #1]
 	ldrb r3, [r2, #2]
 	orr r0, r0, r3, lsl #0x8
@@ -312,8 +312,8 @@ mw16_1:
 
 .macro Prefetch24
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x120000
-	subne snesCycles, snesCycles, #0x180000
+	addeq snesCycles, snesCycles, #0x120000
+	addne snesCycles, snesCycles, #0x180000
 	ldrb r0, [r2, #1]
 	ldrb r3, [r2, #2]
 	orr r0, r0, r3, lsl #0x8
@@ -329,8 +329,8 @@ mw16_1:
 	bic r3, r3, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x60000
-	subne snesCycles, snesCycles, #0x80000
+	addeq snesCycles, snesCycles, #0x60000
+	addne snesCycles, snesCycles, #0x80000
 	bic r3, r3, #0xF0000000
 	mov r0, snesPC, lsl #0x3
 	ldrb r0, [r3, r0, lsr #0x13]
@@ -343,8 +343,8 @@ mw16_1:
 	bic r3, r3, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0xC0000
-	subne snesCycles, snesCycles, #0x100000
+	addeq snesCycles, snesCycles, #0xC0000
+	addne snesCycles, snesCycles, #0x100000
 	bic r3, r3, #0xF0000000
 	mov r0, snesPC, lsl #0x3
 	add r3, r3, r0, lsr #0x13
@@ -360,8 +360,8 @@ mw16_1:
 	bic r3, r3, #0x1800
 	ldr r3, [memoryMap, r3, lsr #0xB]
 	tst r3, #0x10000000
-	subeq snesCycles, snesCycles, #0x120000
-	subne snesCycles, snesCycles, #0x180000
+	addeq snesCycles, snesCycles, #0x120000
+	addne snesCycles, snesCycles, #0x180000
 	bic r3, r3, #0xF0000000
 	mov r0, snesPC, lsl #0x3
 	add r3, r3, r0, lsr #0x13
@@ -604,6 +604,7 @@ OpTableStart:
 
 .global CPU_Reset
 .global CPU_Run
+.global CPU_MainLoop
 .global CPU_TriggerIRQ
 .global CPU_TriggerNMI
 
@@ -627,7 +628,7 @@ OpTableStart:
 
 @ add fast cycles (for CPU IO cycles)
 .macro AddCycles num, cond=
-	sub\cond snesCycles, snesCycles, #(\num * 0x60000)
+	add\cond snesCycles, snesCycles, #(\num * 0x60000)
 .endm
 
 
@@ -640,7 +641,7 @@ CPU_Reset:
 	mov snesY, #0
 	ldr snesS, =0x01FF0000	@ also PBR
 	mov snesD, #0			@ also DBR
-	ldr snesP, =0x00000534	@ we'll do PC later
+	ldr snesP, =0x00000134	@ we'll do PC later
 	
 	ldr memoryMap, =Mem_PtrTable
 	ldr memoryMap, [memoryMap]
@@ -662,15 +663,18 @@ CPU_Reset:
 	bx lr
 	
 CPU_TriggerIRQ:
+	tst snesP, #flagI
+	bic snesP, #flagW
+	bxne lr		@ do not execute the IRQ if it's disabled (TODO: optimize this shit? avoid branching here in those cases?)
 	bic r3, snesS, #0x18000000
 	ldr r3, [memoryMap, r3, lsr #0x1B]
 	mov r2, snesS, lsl #0x3
 	add r3, r3, r2, lsr #0x13
 	tst snesP, #flagE
 	subne snesS, snesS, #0x30000
-	subne snesCycles, snesCycles, #0x180000
+	addne snesCycles, snesCycles, #0x180000
 	subeq snesS, snesS, #0x40000
-	subeq snesCycles, snesCycles, #0x200000
+	addeq snesCycles, snesCycles, #0x200000
 	tst r3, #0x40000000
 	bne irq_nostack
 	bic r3, r3, #0xF0000000
@@ -693,7 +697,7 @@ irq_nostack:
 	subne r0, r0, #vec_e1_IRQ
 	ldrh r0, [r0]
 	SetPC
-	b irq_end
+	bx lr
 	
 CPU_TriggerNMI:
 	bic r3, snesS, #0x18000000
@@ -702,9 +706,9 @@ CPU_TriggerNMI:
 	add r3, r3, r2, lsr #0x13
 	tst snesP, #flagE
 	subne snesS, snesS, #0x30000
-	subne snesCycles, snesCycles, #0x180000
+	addne snesCycles, snesCycles, #0x180000
 	subeq snesS, snesS, #0x40000
-	subeq snesCycles, snesCycles, #0x200000
+	addeq snesCycles, snesCycles, #0x200000
 	tst r3, #0x40000000
 	bne nmi_nostack
 	bic r3, r3, #0xF0000000
@@ -718,6 +722,7 @@ CPU_TriggerNMI:
 	strb snesP, [r3, #-2]
 nmi_nostack:
 	bic snesP, snesP, #(flagD|flagW)
+	bic snesP, snesP, #flagNMI
 	orr snesP, snesP, #flagI
 	bic snesPBR, snesPBR, #0xFF
 	ldr r0, =ROM_Bank0End
@@ -727,7 +732,7 @@ nmi_nostack:
 	subne r0, r0, #vec_e1_NMI
 	ldrh r0, [r0]
 	SetPC
-	b newline
+	b nmi_return
 	
 .global CPU_GetPC
 CPU_GetPC:
@@ -754,169 +759,265 @@ CPU_GetReg:
 CPU_Cycles:
 	.long 0
 	
+	
 CPU_Run:
+	stmdb sp!, {r3, lr}
+	
+	@ TODO finish this
+	@tst snesP, #flagDMA
+	@addne r0, snesCycles, #7
+	@bicne r0, r0, #7
+	@ldr r1, =DMA_Cycles
+	@ldr r2, [r1]
+	@sub r2, r2, r0
+	
+	@tst snesP, #flagNMI
+	@bne CPU_TriggerNMI
+	
+	@ HAAXXX
+	tst snesP, #flagNMI
+	bicne snesP, snesP, #flagW
+	
+	@ do not execute if we're waiting for an IRQ
+	tst snesP, #flagW
+	beq cpuloop
+	
+	@ WAI: look if we're supposed to get an IRQ
+	ldrh r0, [snesStatus, #IRQ_CurHMatch]
+	cmp r0, #0x8000 @ no IRQ for this line
+	beq wai_noirq
+	mov snesCycles, snesCycles, lsl #16
+	mov snesCycles, snesCycles, lsr #16
+	orr snesCycles, snesCycles, r0, lsl #16
+	cmp snesCycles, snesCycles, lsl #16
+	bge cpu_run_end
+	b cpuloop
+
+wai_noirq:
+	mov snesCycles, snesCycles, lsl #16
+	orr snesCycles, snesCycles, lsr #16
+	ldmia sp!, {r3, pc}
+	
+cpuloop:
+		ldrb r3, [snesStatus, #HVBFlags]
+		
+		@ check for IRQ
+		ldrh r0, [snesStatus, #IRQ_CurHMatch]
+		cmp r0, snesCycles, asr #16
+		bgt _noirq
+		mov r0, #0x8000
+		strh r0, [snesStatus, #IRQ_CurHMatch]
+		orr r3, r3, #0x10
+		strb r3, [snesStatus, #HVBFlags]
+	_noirq:
+	
+		tst r3, #0x10
+		blne CPU_TriggerIRQ
+		
+		OpcodePrefetch8
+		str snesCycles, [snesStatus, #HCountFull]
+		ldr pc, [opTable, r0, lsl #0x2]
+		
+	op_return:
+	
+		@ delayed NMI check
+		@ not elegant, but will do
+		tst snesP, #flagNMI
+		bne CPU_TriggerNMI
+	nmi_return:
+	
+		cmp snesCycles, snesCycles, lsl #16
+		blt cpuloop
+	
+cpu_run_end:
+	ldmia sp!, {r3, pc}
+	
+	
+	
+.global CPU_MainLoop
+CPU_MainLoop:
+	stmdb sp!, {r0-r12, lr}
 	LoadRegs
+	
+	SafeCall DMA_ReloadHDMA
+	
+	mov r3, #0
+	mov snesCycles, snesCycles, lsr #16
+	mov snesCycles, snesCycles, lsl #16
+	add snesCycles, #1024
 
-frameloop:
-		ldr r0, =0x05540000
-		add snesCycles, snesCycles, r0
-		mov r0, #0
-		ldr r1, =PPU_VCount
-		strh r0, [r1]
-		stmdb sp!, {r12}
-		bl PPU_SNESVBlankEnd
-		bl DMA_ReloadHDMA
-		ldmia sp!, {r12}
-		b emuloop
+lineloop1:
+		strh r3, [snesStatus, #VCount]
 		
-newline:
-			ldr r0, =0x05540001
-			add snesCycles, snesCycles, r0
-			
-			ldr r0, =PPU_VCount
-			strh snesCycles, [r0]
-			
-emuloop:
-				mov r3, snesCycles, asr #0x10
-				ldrh r0, [memoryMap, #-0x6] @ IRQ cond in lower bits, flags in higher bits
-				tst r0, #0x4000				@ check if we gotta handle the HBlank
-				bne hblank_end
-				cmp r3, #0x10C
-				bgt hblank_end
-				orr r0, r0, #0x4000
-				strh r0, [memoryMap, #-0x6]
-				stmdb sp!, {r0, r3, r12}
-				bl PPU_SNESHBlank
-				bl DMA_DoHDMA
-				ldmia sp!, {r0, r3, r12}
-				
-hblank_end:
-				tst r0, #0x0800				@ check if we already triggered an IRQ in this scanline
-				bne irq_end
-				tst snesP, #flagI
-				bne irq_end
-				
-				and r0, r0, #0x0003
-				ldr pc, [pc, r0, lsl #0x2]
-				nop
-				.long irq_end
-				.long irq_h
-				.long irq_v
-				.long irq_hv
-				
-irq_h:
-				ldr r0, =Mem_HMatch
-				ldrh r0, [r0]
-				cmp r3, r0					@ r3 = cycle count
-				ble irq_trigger
-				b irq_end
-				
-irq_v:
-				ldr r0, =Mem_VMatch
-				ldrh r0, [r0]
-				ldr r1, =PPU_VCount
-				ldrh r1, [r1]
-				cmp r0, r1
-				beq irq_trigger
-				@ if this isn't the right scanline, set the flag so we don't bother checking again
-				ldrb r0, [memoryMap, #-0x5]
-				orr r0, r0, #0x08
-				strb r0, [memoryMap, #-0x5]
-				b irq_end
-
-irq_hv:
-				ldr r0, =Mem_VMatch
-				ldrh r0, [r0]
-				ldr r1, =PPU_VCount
-				ldrh r1, [r1]
-				cmp r0, r1
-				ldrneb r0, [memoryMap, #-0x5]
-				orrne r0, r0, #0x08
-				strneb r0, [memoryMap, #-0x5]
-				bne irq_end
-				ldr r0, =Mem_HMatch
-				ldrh r0, [r0]
-				cmp r3, r0					@ r3 = cycle count
-				bgt irq_end
-				
-irq_trigger:
-				ldrb r0, [memoryMap, #-0x5]
-				orr r0, r0, #0x18
-				strb r0, [memoryMap, #-0x5]
-				b CPU_TriggerIRQ
-				
-irq_end:
-				tst snesP, #flagW
-				subne snesPC, snesPC, #0x10000
-				
-				OpcodePrefetch8
-				ldr pc, [opTable, r0, lsl #0x2]
-op_return:
-				
-				cmp snesCycles, #0x00010000
-				bge emuloop
-				
-emulate_hardware:
-			ldrb r2, [memoryMap, #-0x5]
-			bic r2, r2, #0x48				@ clear HBlank and per-scanline IRQ flags
-			strb r2, [memoryMap, #-0x5]
-			mov r1, snesCycles, lsl #0x10
-			
-			cmp r1, #0xE00000
-			orrge r2, r2, #0x80
-			orreq r2, r2, #0x20
-			strgeb r2, [memoryMap, #-0x5]
-			bge vblank
-			bic r2, r2, #0xA0
-			strb r2, [memoryMap, #-0x5]
-			b newline
-			
-vblank:
-			bne vblank_notfirst
-			SafeCall PPU_SNESVBlank
-			tst snesP, #flagI2
-			beq CPU_TriggerNMI
-			
-vblank_notfirst:
-			mov r3, #0x83
-			cmp r1, r3, lsl #0x11
-			blt newline
-			
-		sub snesCycles, snesCycles, r3, lsl #0x1
-		ldr r0, =262
-		ldr r1, =PPU_VCount
-		strh r0, [r1]
+		@ IRQ check
+		ldrb r0, [snesStatus, #IRQCond]
+		and r0, r0, #0x30
+		mov r1, #0x8000
+		ldr pc, [pc, r0, lsr #2]
+		nop
+	.long _1_irq0, _1_irq1, _1_irq2, _1_irq3
+	
+	_1_irq1:
+		ldrh r1, [snesStatus, #IRQ_HMatch]
+		b _1_irqend
 		
-		@ causes glitches when running < 60fps
-		@ (vblank handler should be called directly if no vblank, but then
-		@ what about writing to graphics stuff outside of vblank?)
-		@ldr r3, =0x0B003FF8
-		@ldr r0, [r3]
-		@tst r0, #0x00000001
-		@swieq #0x50000
-		@ldr r0, [r3]
-		@bic r0, #0x00000001
-		@str r0, [r3]
+	_1_irq2:
+		ldrh r2, [snesStatus, #IRQ_VMatch]
+		cmp r2, r3
+		moveq r1, #0
+		movne r1, #0x8000
+		b _1_irqend
 		
-		swi #0x50000
-		b frameloop
+	_1_irq3:
+		ldrh r2, [snesStatus, #IRQ_VMatch]
+		cmp r2, r3
+		ldreqh r1, [snesStatus, #IRQ_HMatch]
+		movne r1, #0x8000
+		b _1_irqend
+		
+	_1_irq0:
+		mov r1, #0x8000
+		
+	_1_irqend:
+		strh r1, [snesStatus, #IRQ_CurHMatch]
+		
+		@ run display
+		/*stmdb sp!, {r3, r12}
+		ldrh r0, [snesStatus, #VCount]
+		bl PPU_RenderScanline
+		ldmia sp!, {r3, r12}*/
+		
+		@ run until the HBlank
+		bl CPU_Run
+		
+		@ HBlank -- run HDMA
+		stmdb sp!, {r3, r12}
+		bl PPU_SNESHBlank
+		bl DMA_DoHDMA
+		ldmia sp!, {r3, r12}
+		
+		@ run until the end of the scanline
+		add snesCycles, snesCycles, #340
+		bl CPU_Run
+		
+		@ run the SPC700
+		/*mov r0, snesCycles, asr #16
+		ldr r1, [snesStatus, #SPC_CycleRatio]
+		mul r2, r1, r0
+		ldr r1, [snesStatus, #SPC_LastCycle]
+		subs r0, r2, r1
+		ldr r1, [snesStatus, #SPC_CyclesPerLine]
+		sub r2, r2, r1
+		str r2, [snesStatus, #SPC_LastCycle]
+		@movs r0, r0, asr #24
+		@movmis r0, #0
+		@blne SPC_Run
+		blgt SPC_Run*/
+		
+		ldr r0, =((1364<<16) + 340)
+		sub snesCycles, snesCycles, r0
+		
+		ldrb r0, [snesStatus, #ScreenHeight]
+		cmp r3, r0
+		add r3, r3, #1
+		blt lineloop1
+		
+	mov snesCycles, snesCycles, lsr #16
+	mov snesCycles, snesCycles, lsl #16
+	add snesCycles, #1024
+	add snesCycles, #340
+	
+	stmdb sp!, {r3}
+	@ VBlank
+	ldrh r0, [snesStatus, #IRQCond] @ load both IRQCond and HVBFlags
+	orr r0, r0, #0xA000
+	strh r0, [snesStatus, #IRQCond]
+	tst r0, #0x80
+	orrne snesP, snesP, #flagNMI @ trigger NMI if needed
+	
+	SafeCall PPU_SNESVBlank
+	ldmia sp!, {r3}
+	
+lineloop2:
+		strh r3, [snesStatus, #VCount]
+		
+		@ IRQ check
+		ldrb r0, [snesStatus, #IRQCond]
+		and r0, r0, #0x30
+		mov r1, #0x8000
+		ldr pc, [pc, r0, lsr #2]
+		nop
+	.long _2_irq0, _2_irq1, _2_irq2, _2_irq3
+	
+	_2_irq1:
+		ldrh r1, [snesStatus, #IRQ_HMatch]
+		b _2_irqend
+		
+	_2_irq2:
+		ldrh r2, [snesStatus, #IRQ_VMatch]
+		cmp r2, r3
+		moveq r1, #0
+		movne r1, #0x8000
+		b _2_irqend
+		
+	_2_irq3:
+		ldrh r2, [snesStatus, #IRQ_VMatch]
+		cmp r2, r3
+		ldreqh r1, [snesStatus, #IRQ_HMatch]
+		movne r1, #0x8000
+		b _2_irqend
+		
+	_2_irq0:
+		mov r1, #0x8000
+		
+	_2_irqend:
+		strh r1, [snesStatus, #IRQ_CurHMatch]
+		
+		@ run until the end of the scanline
+		bl CPU_Run
+		
+		@ run the SPC700
+		/*mov r0, snesCycles, asr #16
+		ldr r1, [snesStatus, #SPC_CycleRatio]
+		mul r2, r1, r0
+		ldr r1, [snesStatus, #SPC_LastCycle]
+		subs r0, r2, r1
+		ldr r1, [snesStatus, #SPC_CyclesPerLine]
+		sub r2, r2, r1
+		str r2, [snesStatus, #SPC_LastCycle]
+		@movs r0, r0, asr #24
+		@movmis r0, #0
+		@blne SPC_Run
+		blgt SPC_Run*/
+		
+		ldr r0, =(1364<<16)
+		sub snesCycles, snesCycles, r0
+		
+		add r3, r3, #1
+		ldrb r0, [snesStatus, #TotalLines] 
+		cmp r3, r0, lsl #1
+		blt lineloop2
+	
+	@ end of frame
+	ldrb r0, [snesStatus, #HVBFlags]
+	bic r0, r0, #0xA0
+	strb r0, [snesStatus, #HVBFlags]
+	
+	SafeCall PPU_SNESVBlankEnd
+	
+frame_end:
+	StoreRegs
+	ldmia sp!, {r0-r12, pc}
 		
 .ltorg
 
 
 .macro EatCycles
-	cmp snesCycles, #0x00010000
-	blt 1f
-	mov r3, snesCycles, asr #0x10
-	ldr r0, =Mem_HMatch
-	ldrh r0, [r0]
-	cmp r3, r0
-	eor snesCycles, snesCycles, r3, lsl #0x10
-	movgt r3, r0
-	movle r3, #1
-	orr snesCycles, snesCycles, r3, lsl #0x10
-1:
+	mov snesCycles, snesCycles, lsl #16
+	orr snesCycles, snesCycles, lsr #16
 .endm
+	
+	
 	
 @ --- Addressing modes --------------------------------------------------------
 @ TODO: indexed addressing modes must add one cycle if adding index crosses a

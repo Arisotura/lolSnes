@@ -84,13 +84,9 @@ Mem_IOWrite8:
 	beq Mem_JoyWrite8
 	
 	cmp r2, #0x4200
-	bxne lr
-	cmp r0, #0x00
-	bne Mem_GIOWrite8
-	tst r1, #0x80
-	bicne snesP, snesP, #flagI2
-	orreq snesP, snesP, #flagI2	
-	b Mem_GIOWrite8
+	beq Mem_GIOWrite8
+	
+	bx lr
 	
 Mem_IOWrite16:
 	and r2, r0, #0xFF00
@@ -107,10 +103,6 @@ Mem_IOWrite16:
 	beq Mem_JoyWrite16
 	
 	cmp r2, #0x4200
-	bxne lr
-	cmp r0, #0x00
-	bne Mem_GIOWrite16
-	tst r1, #0x80
-	bicne snesP, snesP, #flagI2
-	orreq snesP, snesP, #flagI2
-	b Mem_GIOWrite16
+	beq Mem_GIOWrite16
+	
+	bx lr

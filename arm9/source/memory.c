@@ -166,6 +166,10 @@ bool Mem_LoadROM(char* path)
 	else
 		ROM_Region = 1;
 	
+	//
+	
+	//SPC_CycleRatio = ROM_Region ? 132990 : 134013;
+	
 	Mem_SRAMMask = sramsize ? ((1024 << sramsize) - 1) : 0;
 	Mem_SRAMMask &= 0x000FFFFF;
 	iprintf("SRAM size: %dKB\n", (Mem_SRAMMask+1) >> 10);
@@ -221,6 +225,23 @@ void Mem_Reset()
 	Mem_Status->HVBFlags = 0x00;
 	Mem_Status->SRAMMask = Mem_SRAMMask;
 	Mem_Status->IRQCond = 0;
+	
+	Mem_Status->VCount = 0;
+	Mem_Status->HCount = 0;
+	Mem_Status->IRQ_VMatch = 0;
+	Mem_Status->IRQ_HMatch = 0;
+	Mem_Status->IRQ_CurHMatch = 0x8000;
+	
+	Mem_Status->SPC_LastCycle = 0;
+	
+	Mem_Status->TotalLines = (ROM_Region ? 312 : 262) >> 1;
+	Mem_Status->ScreenHeight = 224;
+	
+	//Mem_Status->SPC_CycleRatio = ROM_Region ? 0x000C51D9 : 0x000C39C6;
+	//Mem_Status->SPC_CycleRatio += 0x1000; // hax -- TODO investigate why we need this to run at a somewhat proper rate
+	Mem_Status->SPC_CycleRatio = 6400;//6418;//6400;//ROM_Region ? 132990 : 134013;
+	Mem_Status->SPC_CyclesPerLine = Mem_Status->SPC_CycleRatio * 1364;
+	//Mem_Status->SPC_CyclesPerLine = ROM_Region ? 0x41A41A42 : 0x4123D3B5;
 	
 	for (b = 0; b < 0x40; b++)
 	{
@@ -384,6 +405,27 @@ inline u8 IO_ReadKeysHigh()
 }
 
 
+void SNES_RescheduleIRQ(u8 val)
+{
+	switch (val & 0x30)
+	{
+		case 0x00: Mem_Status->IRQ_CurHMatch = 0x8000; break;
+		case 0x10: 
+			Mem_Status->IRQ_CurHMatch = (Mem_Status->HCount > Mem_Status->IRQ_HMatch) ? 0x8000:Mem_Status->IRQ_HMatch; 
+			break;
+		case 0x20:
+			Mem_Status->IRQ_CurHMatch = (Mem_Status->VCount != Mem_Status->IRQ_VMatch) ? 0x8000:0; 
+			break;
+		case 0x30:
+			Mem_Status->IRQ_CurHMatch = 
+				((Mem_Status->VCount != Mem_Status->IRQ_VMatch) || 
+				 (Mem_Status->HCount > Mem_Status->IRQ_HMatch))
+				 ? 0x8000:Mem_Status->IRQ_HMatch; 
+			break;
+	}
+}
+
+
 u8 Mem_GIORead8(u32 addr)
 {
 	u8 ret = 0;
@@ -406,7 +448,8 @@ u8 Mem_GIORead8(u32 addr)
 			break;
 			
 		case 0x12:
-			ret = Mem_Status->HVBFlags & 0xC0;
+			ret = Mem_Status->HVBFlags & 0x80;
+			if (Mem_Status->HCount >= 1024) ret |= 0x40;
 			break;
 			
 		case 0x14:
@@ -465,9 +508,11 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 	switch (addr)
 	{
 		case 0x00:
-			// the NMI flag is handled in mem_io.s
-			Mem_Status->IRQCond = (val & 0x30) >> 4;
-			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
+			if ((Mem_Status->IRQCond ^ val) & 0x30) // reschedule the IRQ if needed
+				SNES_RescheduleIRQ(val);
+			if (!(val & 0x30)) // acknowledge current IRQ if needed
+				Mem_Status->HVBFlags &= 0xEF;
+			Mem_Status->IRQCond = val;
 			break;
 			
 		case 0x02:
@@ -498,25 +543,25 @@ void Mem_GIOWrite8(u32 addr, u8 val)
 			break;
 			
 		case 0x07:
-			Mem_HMatchRaw &= 0xFF00;
-			Mem_HMatchRaw |= val;
-			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
-			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
+			Mem_Status->IRQ_HMatch &= 0x0400;
+			Mem_Status->IRQ_HMatch |= (val << 2);
+			if (Mem_Status->IRQCond & 0x10) SNES_RescheduleIRQ(Mem_Status->IRQCond);
 			break;
 		case 0x08:
-			Mem_HMatchRaw &= 0x00FF;
-			Mem_HMatchRaw |= (val << 8);
-			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
-			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
+			Mem_Status->IRQ_HMatch &= 0x03FC;
+			Mem_Status->IRQ_HMatch |= ((val & 0x01) << 10);
+			if (Mem_Status->IRQCond & 0x10) SNES_RescheduleIRQ(Mem_Status->IRQCond);
 			break;
 			
 		case 0x09:
-			Mem_VMatch &= 0xFF00;
-			Mem_VMatch |= val;
+			Mem_Status->IRQ_VMatch &= 0x0100;
+			Mem_Status->IRQ_VMatch |= val;
+			if (Mem_Status->IRQCond & 0x20) SNES_RescheduleIRQ(Mem_Status->IRQCond);
 			break;
 		case 0x0A:
-			Mem_VMatch &= 0x00FF;
-			Mem_VMatch |= (val << 8);
+			Mem_Status->IRQ_VMatch &= 0x00FF;
+			Mem_Status->IRQ_VMatch |= ((val & 0x01) << 8);
+			if (Mem_Status->IRQCond & 0x20) SNES_RescheduleIRQ(Mem_Status->IRQCond);
 			break;
 			
 		case 0x0B:
@@ -554,13 +599,13 @@ void Mem_GIOWrite16(u32 addr, u16 val)
 			break;
 			
 		case 0x07:
-			Mem_HMatchRaw = val;
-			Mem_HMatch = 1364 - (Mem_HMatchRaw << 2);
-			Mem_HCheck = (Mem_Status->IRQCond & 0x1) ? Mem_HMatch : 1364;
+			Mem_Status->IRQ_HMatch = (val & 0x01FF) << 2;
+			if (Mem_Status->IRQCond & 0x10) SNES_RescheduleIRQ(Mem_Status->IRQCond);
 			break;
 			
 		case 0x09:
-			Mem_VMatch = val;
+			Mem_Status->IRQ_VMatch = val & 0x01FF;
+			if (Mem_Status->IRQCond & 0x20) SNES_RescheduleIRQ(Mem_Status->IRQCond);
 			break;
 			
 		case 0x0B:

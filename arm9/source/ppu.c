@@ -2052,10 +2052,18 @@ void PPU_Write8(u32 addr, u8 val)
 			break;
 			
 		case 0x33: // SETINI
-			if (val & 0x80) iprintf("!! PPU EXT SYNC\n");
-			if (val & 0x40) iprintf("!! MODE7 EXTBG\n");
-			if (val & 0x08) iprintf("!! PSEUDO HIRES\n");
-			if (val & 0x02) iprintf("!! SMALL SPRITES\n");
+			{
+				u32 height = (val & 0x04) ? 239:224;
+				if (height != Mem_Status->ScreenHeight)
+				{
+					Mem_Status->ScreenHeight = height;
+					//ApplyScaling();
+				}
+				if (val & 0x80) iprintf("!! PPU EXT SYNC\n");
+				if (val & 0x40) iprintf("!! MODE7 EXTBG\n");
+				if (val & 0x08) iprintf("!! PSEUDO HIRES\n");
+				if (val & 0x02) iprintf("!! SMALL SPRITES\n");
+			}
 			break;
 			
 		case 0x40: IPC->SPC_IOPorts[0] = val; break;
@@ -2102,11 +2110,17 @@ void PPU_Write16(u32 addr, u16 val)
 }
 
 int lastvc = 0;
+int zarp=0;
+int nvbl = 0;
 ITCM_CODE void PPU_SNESVBlank()
 {
 	//iprintf("IO: %d\n", numio); numio = 0;
+	//iprintf("VBLANK %d/%d\n", zarp, Mem_Status->ScreenHeight); zarp++;
 	PPU_OAMAddr = PPU_OAMReload;
-	dsp_sendData(0, 0x8000);
+	//dsp_sendData(0, 0x8000);
+	//iprintf("zorp\n");
+	iprintf("VBlank: %d\n", nvbl);
+	nvbl=0;
 }
 
 ITCM_CODE void PPU_SNESVBlankEnd()
@@ -2117,12 +2131,12 @@ ITCM_CODE void PPU_SNESVBlankEnd()
 ITCM_CODE void PPU_SNESHBlank()
 {numio++;
 	// TODO 239-line resolution for PAL mode (see SETINI 2133 bit2)
-	if (PPU_VCount > 0 && PPU_VCount <= 224)
-		dsp_sendData(0, 0x4000 | PPU_VCount);// | (CurFrame ? 0:0x100));
-	
+	if (Mem_Status->VCount > 0)// && PPU_VCount <= 224)
+		dsp_sendData(0, 0x4000 | Mem_Status->VCount);// | (CurFrame ? 0:0x100));
+	//iprintf("sc%d/%d\n", Mem_Status->VCount, Mem_Status->ScreenHeight);
 	//if (PPU_VCount != (lastvc+1))
 	//	iprintf("AAA %d->%d\n", lastvc, PPU_VCount);
-	lastvc = PPU_VCount;
+	//lastvc = PPU_VCount;
 }
 
 u32 gorp = 0;
@@ -2148,7 +2162,8 @@ ITCM_CODE void PPU_VBlank()
 	
 	//if (*(vu16*)0x06000000 != 0x8000)
 	//	iprintf("%04X %04X %04X %04X %04X %04X\n", *(vu16*)0x06000200, *(vu16*)0x06000210, *(vu16*)0x06000220, *(vu16*)0x06000400, *(vu16*)0x06001000, *(vu16*)0x06001010);
-iprintf("%08X\n", *(vu32*)0x06000200);
+//iprintf("%04d %08X\n", gorp, *(vu32*)0x06000200); gorp++;
+nvbl++;
 	/*u32 v = *(vu32*)0x06001000;
 	if (v > gorp) gorp = v;
 	iprintf("%08X %08X\n", v, gorp);*/

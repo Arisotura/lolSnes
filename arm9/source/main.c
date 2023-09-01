@@ -345,7 +345,13 @@ int main(void)
 				irqSet(IRQ_HBLANK, PPU_HBlank);
 
 				swiWaitForVBlank();
-				CPU_Run();
+				//CPU_Run();
+				// TODO make it not suck!
+				for (;;)
+				{
+					CPU_MainLoop();
+					swiWaitForVBlank();
+				}
 			}
 			
 			keypress = 0x03FF;
@@ -365,4 +371,17 @@ void printvar()
 void printstuff(u32 foo, u32 bar, u32 blarg)
 {
 	iprintf("printstuff %08X %08X %08X\n", foo, bar, blarg);
+}
+
+void extremedicks(u32 a, u32 b, u32 c)
+{
+	iprintf("d %08X %08X %08X\n", a, b, c);
+	u16 lastkeys = *(vu16*)0x04000130;
+	for (;;)
+	{
+		u16 keys = *(vu16*)0x04000130;
+		if (((~keys) & lastkeys) & KEY_A) return;
+		lastkeys = keys;
+		swiWaitForVBlank();
+	}
 }
